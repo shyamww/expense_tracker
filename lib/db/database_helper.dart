@@ -1,0 +1,545 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart' as p;
+import '../models/expense.dart';
+import '../models/income.dart';
+import '../models/income_entry.dart';
+
+class DatabaseHelper {
+  static final DatabaseHelper _instance = DatabaseHelper._internal();
+  factory DatabaseHelper() => _instance;
+  DatabaseHelper._internal();
+
+  // ── Web in-memory storage ──
+  final List<Map<String, dynamic>> _webExpenses = [];
+  final List<Map<String, dynamic>> _webIncome = [];
+  final List<Map<String, dynamic>> _webIncomeHistory = [];
+  int _nextExpenseId = 1;
+  int _nextIncomeId = 1;
+  int _nextIncomeHistoryId = 1;
+
+  // ── Mobile SQLite ──
+  Database? _database;
+
+  Future<Database> _getDb() async {
+    if (_database != null) return _database!;
+    final dbPath = await getDatabasesPath();
+    final path = p.join(dbPath, 'expense_tracker.db');
+    _database = await openDatabase(
+      path,
+      version: 2,
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+    );
+    return _database!;
+  }
+
+  Future<void> _onCreate(Database db, int version) async {
+    await db.execute('''
+      CREATE TABLE expenses (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        amount REAL NOT NULL,
+        category TEXT NOT NULL,
+        note TEXT DEFAULT '',
+        date TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE income (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        amount REAL NOT NULL,
+        month TEXT NOT NULL UNIQUE
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE income_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        amount REAL NOT NULL,
+        month TEXT NOT NULL,
+        note TEXT DEFAULT '',
+        created_at TEXT NOT NULL
+      )
+    ''');
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS income_history (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          amount REAL NOT NULL,
+          month TEXT NOT NULL,
+          note TEXT DEFAULT '',
+          created_at TEXT NOT NULL
+        )
+      ''');
+    }
+  }
+
+  // ── Expense CRUD ──
+
+  Future<int> insertExpense(Expense expense) async {
+    if (kIsWeb) {
+      final map = Map<String, dynamic>.from(expense.toMap());
+      map['id'] = _nextExpenseId++;
+      _webExpenses.add(map);
+      return map['id'] as int;
+    }
+    final db = await _getDb();
+    return await db.insert('expenses', expense.toMap());
+  }
+
+  int _compareExpenseRowDesc(Map<String, dynamic> a, Map<String, dynamic> b) {
+    final dateCmp = (b['date'] as String).compareTo(a['date'] as String);
+    if (dateCmp != 0) return dateCmp;
+    return (b['created_at'] as String).compareTo(a['created_at'] as String);
+  }
+
+  Future<List<Expense>> getAllExpenses() async {
+    if (kIsWeb) {
+      final sorted = List<Map<String, dynamic>>.from(_webExpenses)
+        ..sort(_compareExpenseRowDesc);
+      return sorted.map((m) => Expense.fromMap(m)).toList();
+    }
+    final db = await _getDb();
+    final maps = await db.query('expenses', orderBy: 'date DESC, created_at DESC');
+    return maps.map((m) => Expense.fromMap(m)).toList();
+  }
+
+  Future<List<Expense>> getExpensesByMonth(String month) async {
+    if (kIsWeb) {
+      final filtered = _webExpenses
+          .where((m) => (m['date'] as String).startsWith(month))
+          .toList()
+        ..sort(_compareExpenseRowDesc);
+      return filtered.map((m) => Expense.fromMap(m)).toList();
+    }
+    final db = await _getDb();
+    final maps = await db.query(
+      'expenses',
+      where: "date LIKE ?",
+      whereArgs: ['$month%'],
+      orderBy: 'date DESC, created_at DESC',
+    );
+    return maps.map((m) => Expense.fromMap(m)).toList();
+  }
+
+  Future<List<Expense>> getExpensesByDateRange(String from, String to) async {
+    if (kIsWeb) {
+      final filtered = _webExpenses.where((m) {
+        final date = m['date'] as String;
+        return date.compareTo(from) >= 0 && date.compareTo(to) <= 0;
+      }).toList()
+        ..sort(_compareExpenseRowDesc);
+      return filtered.map((m) => Expense.fromMap(m)).toList();
+    }
+    final db = await _getDb();
+    final maps = await db.query(
+      'expenses',
+      where: 'date >= ? AND date <= ?',
+      whereArgs: [from, to],
+      orderBy: 'date DESC, created_at DESC',
+    );
+    return maps.map((m) => Expense.fromMap(m)).toList();
+  }
+
+  Future<int> updateExpense(Expense expense) async {
+    if (kIsWeb) {
+      final index = _webExpenses.indexWhere((m) => m['id'] == expense.id);
+      if (index != -1) {
+        _webExpenses[index] = Map<String, dynamic>.from(expense.toMap());
+        _webExpenses[index]['id'] = expense.id;
+      }
+      return index != -1 ? 1 : 0;
+    }
+    final db = await _getDb();
+    return await db.update('expenses', expense.toMap(),
+        where: 'id = ?', whereArgs: [expense.id]);
+  }
+
+  Future<int> deleteExpense(int id) async {
+    if (kIsWeb) {
+      final len = _webExpenses.length;
+      _webExpenses.removeWhere((m) => m['id'] == id);
+      return len - _webExpenses.length;
+    }
+    final db = await _getDb();
+    return await db.delete('expenses', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ── Income CRUD ──
+
+  Future<int> upsertIncome(Income income, {String note = '', DateTime? date}) async {
+    final entry = IncomeEntry(
+      amount: income.amount,
+      month: income.month,
+      note: note,
+      createdAt: date?.toIso8601String(),
+    );
+    await _insertIncomeHistory(entry);
+
+    if (kIsWeb) {
+      final index = _webIncome.indexWhere((m) => m['month'] == income.month);
+      if (index != -1) {
+        final oldAmount = (_webIncome[index]['amount'] as num).toDouble();
+        _webIncome[index]['amount'] = oldAmount + income.amount;
+        return 1;
+      } else {
+        final map = Map<String, dynamic>.from(income.toMap());
+        map['id'] = _nextIncomeId++;
+        _webIncome.add(map);
+        return map['id'] as int;
+      }
+    }
+    final db = await _getDb();
+    final existing = await db.query('income',
+        where: 'month = ?', whereArgs: [income.month]);
+    if (existing.isNotEmpty) {
+      final oldAmount = (existing.first['amount'] as num).toDouble();
+      final newAmount = oldAmount + income.amount;
+      return await db.update('income', {'amount': newAmount},
+          where: 'month = ?', whereArgs: [income.month]);
+    } else {
+      return await db.insert('income', income.toMap());
+    }
+  }
+
+  // ── Income History ──
+
+  Future<int> _insertIncomeHistory(IncomeEntry entry) async {
+    if (kIsWeb) {
+      final map = Map<String, dynamic>.from(entry.toMap());
+      map['id'] = _nextIncomeHistoryId++;
+      _webIncomeHistory.add(map);
+      return map['id'] as int;
+    }
+    final db = await _getDb();
+    return await db.insert('income_history', entry.toMap());
+  }
+
+  Future<List<IncomeEntry>> getIncomeHistoryForMonth(String month) async {
+    if (kIsWeb) {
+      final filtered = _webIncomeHistory
+          .where((m) => m['month'] == month)
+          .toList()
+        ..sort((a, b) => (b['created_at'] as String).compareTo(a['created_at'] as String));
+      return filtered.map((m) => IncomeEntry.fromMap(m)).toList();
+    }
+    final db = await _getDb();
+    final maps = await db.query(
+      'income_history',
+      where: 'month = ?',
+      whereArgs: [month],
+      orderBy: 'created_at DESC',
+    );
+    return maps.map((m) => IncomeEntry.fromMap(m)).toList();
+  }
+
+  Future<IncomeEntry?> getIncomeHistoryById(int id) async {
+    if (kIsWeb) {
+      try {
+        final m = _webIncomeHistory.firstWhere((e) => e['id'] == id);
+        return IncomeEntry.fromMap(m);
+      } catch (_) {
+        return null;
+      }
+    }
+    final db = await _getDb();
+    final maps = await db.query('income_history', where: 'id = ?', whereArgs: [id]);
+    if (maps.isEmpty) return null;
+    return IncomeEntry.fromMap(maps.first);
+  }
+
+  /// Rebuilds [income] row for [month] from the sum of [income_history] rows.
+  Future<void> _recomputeIncomeAggregateForMonth(String month) async {
+    if (kIsWeb) {
+      final sum = _webIncomeHistory
+          .where((m) => m['month'] == month)
+          .fold<double>(0, (s, m) => s + (m['amount'] as num).toDouble());
+      final idx = _webIncome.indexWhere((m) => m['month'] == month);
+      if (sum == 0) {
+        if (idx != -1) _webIncome.removeAt(idx);
+      } else if (idx != -1) {
+        _webIncome[idx]['amount'] = sum;
+      } else {
+        _webIncome.add({'id': _nextIncomeId++, 'month': month, 'amount': sum});
+      }
+      return;
+    }
+    final db = await _getDb();
+    final maps = await db.query('income_history', where: 'month = ?', whereArgs: [month]);
+    var total = 0.0;
+    for (final m in maps) {
+      total += (m['amount'] as num).toDouble();
+    }
+    final existing = await db.query('income', where: 'month = ?', whereArgs: [month]);
+    if (total == 0) {
+      if (existing.isNotEmpty) {
+        await db.delete('income', where: 'month = ?', whereArgs: [month]);
+      }
+    } else if (existing.isNotEmpty) {
+      await db.update('income', {'amount': total}, where: 'month = ?', whereArgs: [month]);
+    } else {
+      await db.insert('income', {'amount': total, 'month': month});
+    }
+  }
+
+  Future<void> updateIncomeHistoryEntry(IncomeEntry entry) async {
+    if (entry.id == null) return;
+    final old = await getIncomeHistoryById(entry.id!);
+    if (old == null) return;
+    final oldMonth = old.month;
+
+    if (kIsWeb) {
+      final idx = _webIncomeHistory.indexWhere((m) => m['id'] == entry.id);
+      if (idx == -1) return;
+      _webIncomeHistory[idx] = {
+        'id': entry.id,
+        'amount': entry.amount,
+        'month': entry.month,
+        'note': entry.note,
+        'created_at': entry.createdAt,
+      };
+      await _recomputeIncomeAggregateForMonth(oldMonth);
+      if (oldMonth != entry.month) {
+        await _recomputeIncomeAggregateForMonth(entry.month);
+      }
+      return;
+    }
+    final db = await _getDb();
+    await db.update(
+      'income_history',
+      {
+        'amount': entry.amount,
+        'month': entry.month,
+        'note': entry.note,
+        'created_at': entry.createdAt,
+      },
+      where: 'id = ?',
+      whereArgs: [entry.id],
+    );
+    await _recomputeIncomeAggregateForMonth(oldMonth);
+    if (oldMonth != entry.month) {
+      await _recomputeIncomeAggregateForMonth(entry.month);
+    }
+  }
+
+  Future<void> deleteIncomeHistoryEntry(int id) async {
+    final old = await getIncomeHistoryById(id);
+    if (old == null) return;
+    final month = old.month;
+
+    if (kIsWeb) {
+      _webIncomeHistory.removeWhere((m) => m['id'] == id);
+      await _recomputeIncomeAggregateForMonth(month);
+      return;
+    }
+    final db = await _getDb();
+    await db.delete('income_history', where: 'id = ?', whereArgs: [id]);
+    await _recomputeIncomeAggregateForMonth(month);
+  }
+
+  Future<Income?> getIncomeForMonth(String month) async {
+    if (kIsWeb) {
+      final match = _webIncome.where((m) => m['month'] == month).toList();
+      if (match.isNotEmpty) return Income.fromMap(match.first);
+      return null;
+    }
+    final db = await _getDb();
+    final maps =
+        await db.query('income', where: 'month = ?', whereArgs: [month]);
+    if (maps.isNotEmpty) return Income.fromMap(maps.first);
+    return null;
+  }
+
+  // ── Carry-forward ──
+
+  Future<double> getCarryForwardForMonth(String month) async {
+    // Sum all (income + received - spent) for every month before `month`
+    final firstDay = '$month-01';
+    double totalIncome = 0;
+    double totalSpent = 0;
+    double totalReceived = 0;
+
+    if (kIsWeb) {
+      for (final m in _webIncome) {
+        if ((m['month'] as String).compareTo(month) < 0) {
+          totalIncome += (m['amount'] as num).toDouble();
+        }
+      }
+      for (final e in _webExpenses) {
+        if ((e['date'] as String).compareTo(firstDay) < 0) {
+          if (e['category'] == 'Received') {
+            totalReceived += (e['amount'] as num).toDouble();
+          } else {
+            totalSpent += (e['amount'] as num).toDouble();
+          }
+        }
+      }
+    } else {
+      final db = await _getDb();
+      final incomeResult = await db.rawQuery(
+        'SELECT COALESCE(SUM(amount), 0) as total FROM income WHERE month < ?',
+        [month],
+      );
+      totalIncome = (incomeResult.first['total'] as num).toDouble();
+
+      final spentResult = await db.rawQuery(
+        "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE date < ? AND category != 'Received'",
+        [firstDay],
+      );
+      totalSpent = (spentResult.first['total'] as num).toDouble();
+
+      final receivedResult = await db.rawQuery(
+        "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE date < ? AND category = 'Received'",
+        [firstDay],
+      );
+      totalReceived = (receivedResult.first['total'] as num).toDouble();
+    }
+
+    return totalIncome + totalReceived - totalSpent;
+  }
+
+  // ── Year queries ──
+
+  Future<List<Income>> getIncomeForYear(int year) async {
+    final yearPrefix = '$year-';
+    if (kIsWeb) {
+      final filtered = _webIncome
+          .where((m) => (m['month'] as String).startsWith(yearPrefix))
+          .toList();
+      return filtered.map((m) => Income.fromMap(m)).toList();
+    }
+    final db = await _getDb();
+    final maps = await db.query(
+      'income',
+      where: "month LIKE ?",
+      whereArgs: ['$yearPrefix%'],
+    );
+    return maps.map((m) => Income.fromMap(m)).toList();
+  }
+
+  Future<List<Expense>> getExpensesForYear(int year) async {
+    final from = '$year-01-01';
+    final to = '$year-12-31';
+    return await getExpensesByDateRange(from, to);
+  }
+
+  // ── Backup & Restore ──
+
+  Future<List<Map<String, dynamic>>> _getAllIncome() async {
+    if (kIsWeb) {
+      return List<Map<String, dynamic>>.from(_webIncome);
+    }
+    final db = await _getDb();
+    return await db.query('income');
+  }
+
+  Future<List<Map<String, dynamic>>> _getAllIncomeHistory() async {
+    if (kIsWeb) {
+      return List<Map<String, dynamic>>.from(_webIncomeHistory);
+    }
+    final db = await _getDb();
+    return await db.query('income_history');
+  }
+
+  Future<String> exportToJson() async {
+    final expenses = await getAllExpenses();
+    final incomeList = await _getAllIncome();
+    final historyList = await _getAllIncomeHistory();
+
+    final data = {
+      'version': 2,
+      'exported_at': DateTime.now().toIso8601String(),
+      'expenses': expenses.map((e) => {
+        'amount': e.amount,
+        'category': e.category,
+        'note': e.note,
+        'date': e.date,
+        'created_at': e.createdAt,
+      }).toList(),
+      'income': incomeList.map((m) => {
+        'amount': m['amount'],
+        'month': m['month'],
+      }).toList(),
+      'income_history': historyList.map((m) => {
+        'amount': m['amount'],
+        'month': m['month'],
+        'note': m['note'] ?? '',
+        'created_at': m['created_at'],
+      }).toList(),
+    };
+
+    return jsonEncode(data);
+  }
+
+  Future<void> importFromJson(String jsonString) async {
+    final data = jsonDecode(jsonString) as Map<String, dynamic>;
+    final expensesList = data['expenses'] as List<dynamic>? ?? [];
+    final incomeList = data['income'] as List<dynamic>? ?? [];
+    final historyList = data['income_history'] as List<dynamic>? ?? [];
+
+    if (kIsWeb) {
+      _webExpenses.clear();
+      _webIncome.clear();
+      _webIncomeHistory.clear();
+      _nextExpenseId = 1;
+      _nextIncomeId = 1;
+      _nextIncomeHistoryId = 1;
+
+      for (final e in expensesList) {
+        final map = Map<String, dynamic>.from(e as Map);
+        map['id'] = _nextExpenseId++;
+        if (map['created_at'] == null) {
+          map['created_at'] = DateTime.now().toIso8601String();
+        }
+        _webExpenses.add(map);
+      }
+      for (final i in incomeList) {
+        final map = Map<String, dynamic>.from(i as Map);
+        map['id'] = _nextIncomeId++;
+        _webIncome.add(map);
+      }
+      for (final h in historyList) {
+        final map = Map<String, dynamic>.from(h as Map);
+        map['id'] = _nextIncomeHistoryId++;
+        if (map['created_at'] == null) {
+          map['created_at'] = DateTime.now().toIso8601String();
+        }
+        _webIncomeHistory.add(map);
+      }
+      return;
+    }
+
+    final db = await _getDb();
+    await db.transaction((txn) async {
+      await txn.delete('expenses');
+      await txn.delete('income');
+      await txn.delete('income_history');
+
+      for (final e in expensesList) {
+        final map = Map<String, dynamic>.from(e as Map);
+        if (map['created_at'] == null) {
+          map['created_at'] = DateTime.now().toIso8601String();
+        }
+        map.remove('id');
+        await txn.insert('expenses', map);
+      }
+      for (final i in incomeList) {
+        final map = Map<String, dynamic>.from(i as Map);
+        map.remove('id');
+        await txn.insert('income', map);
+      }
+      for (final h in historyList) {
+        final map = Map<String, dynamic>.from(h as Map);
+        if (map['created_at'] == null) {
+          map['created_at'] = DateTime.now().toIso8601String();
+        }
+        map.remove('id');
+        await txn.insert('income_history', map);
+      }
+    });
+  }
+}
