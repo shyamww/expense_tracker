@@ -79,27 +79,34 @@ class _CalendarViewState extends State<CalendarView> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          padding: const EdgeInsets.fromLTRB(4, 2, 4, 2),
           child: Row(
-            children: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-                .map((d) => Expanded(
-                      child: Center(
-                        child: Text(
-                          d,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: d == 'Sun' || d == 'Sat'
-                                ? Colors.red.shade400
-                                : Colors.grey.shade600,
-                          ),
+            children: ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+                .asMap()
+                .entries
+                .map((e) {
+                  final i = e.key;
+                  final d = e.value;
+                  final weekend = i == 0 || i == 6;
+                  return Expanded(
+                    child: Center(
+                      child: Text(
+                        d,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: weekend
+                              ? Colors.red.shade400
+                              : Colors.grey.shade600,
                         ),
                       ),
-                    ))
+                    ),
+                  );
+                })
                 .toList(),
           ),
         ),
-        Divider(height: 1, color: Colors.grey.shade200),
+        Divider(height: 1, thickness: 1, color: Colors.grey.shade200),
         Expanded(
           child: PageView.builder(
             controller: _pageController,
@@ -110,7 +117,9 @@ class _CalendarViewState extends State<CalendarView> {
             },
             itemBuilder: (context, page) {
               final month = _monthFromPageIndex(page);
-              return _buildMonthGrid(context, month);
+              return RepaintBoundary(
+                child: _buildMonthGrid(context, month),
+              );
             },
           ),
         ),
@@ -121,6 +130,10 @@ class _CalendarViewState extends State<CalendarView> {
   Widget _buildMonthGrid(BuildContext context, DateTime month) {
     final monthPrefix = DateFormat('yyyy-MM').format(month);
     final dailyTotals = _computeDailyTotals(monthPrefix);
+    final datesWithExpense = <String>{};
+    for (final e in widget.expenses) {
+      if (e.date.startsWith(monthPrefix)) datesWithExpense.add(e.date);
+    }
 
     final firstDay = DateTime(month.year, month.month, 1);
     final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
@@ -128,18 +141,35 @@ class _CalendarViewState extends State<CalendarView> {
     final totalCells = startWeekday + daysInMonth;
     final rowCount = ((totalCells) / 7).ceil();
 
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(4, 0, 4, 60),
-      itemCount: rowCount,
-      itemBuilder: (context, rowIndex) {
-        return _buildWeekRow(
-          context,
-          rowIndex,
-          startWeekday,
-          daysInMonth,
-          dailyTotals,
-          month,
-          widget.expenses,
+    // Cap row height so day cells stay compact; extra space sits below the grid (same summary on all tabs).
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const maxRow = 42.0;
+        const padBottom = 4.0;
+        final innerH = (constraints.maxHeight - padBottom).clamp(0.0, double.infinity);
+        final perRow = rowCount > 0 ? innerH / rowCount : 0.0;
+        final rowH = perRow > maxRow ? maxRow : perRow;
+        final slack = (innerH - rowH * rowCount).clamp(0.0, double.infinity);
+
+        return Padding(
+          padding: EdgeInsets.fromLTRB(4, 0, 4, padBottom + slack),
+          child: Column(
+            children: [
+              for (var rowIndex = 0; rowIndex < rowCount; rowIndex++)
+                SizedBox(
+                  height: rowH,
+                  child: _buildWeekRow(
+                    context,
+                    rowIndex,
+                    startWeekday,
+                    daysInMonth,
+                    dailyTotals,
+                    month,
+                    datesWithExpense,
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );
@@ -166,17 +196,24 @@ class _CalendarViewState extends State<CalendarView> {
     int daysInMonth,
     Map<String, ({double spent, double received})> dailyTotals,
     DateTime month,
-    List<Expense> expenses,
+    Set<String> datesWithExpense,
   ) {
     final today = DateTime.now();
     final todayStr = DateFormat('yyyy-MM-dd').format(today);
     const selectedFill = Color(0xFFEDE9FE);
     const selectedBorder = Color(0xFF7C3AED);
 
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: List.generate(7, (colIndex) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final h = constraints.maxHeight.isFinite ? constraints.maxHeight : 40.0;
+        final dayFont = (h * 0.30).clamp(10.0, 13.0);
+        final amtFont = (h * 0.17).clamp(6.5, 8.0);
+        const cellMargin = 1.0;
+        final dotSize = h >= 36 ? 4.0 : 3.0;
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: List.generate(7, (colIndex) {
           final cellIndex = rowIndex * 7 + colIndex;
           final dayNum = cellIndex - startWeekday + 1;
 
@@ -191,7 +228,7 @@ class _CalendarViewState extends State<CalendarView> {
           final isToday = dateStr == todayStr;
           final isWeekend = colIndex == 0 || colIndex == 6;
           final isSelected = _selectedDateStr == dateStr;
-          final hasExpense = expenses.any((e) => e.date == dateStr);
+          final hasExpense = datesWithExpense.contains(dateStr);
 
           Color? cellBg;
           Color borderColor;
@@ -201,7 +238,7 @@ class _CalendarViewState extends State<CalendarView> {
             borderColor = selectedBorder;
             borderWidth = 2;
           } else if (isToday) {
-            cellBg = Theme.of(context).colorScheme.primary.withOpacity(0.1);
+            cellBg = Theme.of(context).colorScheme.primary.withValues(alpha: 0.1);
             borderColor = Theme.of(context).colorScheme.primary;
             borderWidth = 1.5;
           } else {
@@ -216,7 +253,7 @@ class _CalendarViewState extends State<CalendarView> {
               child: InkWell(
                 onTap: () {
                   setState(() => _selectedDateStr = dateStr);
-                  final hasEntry = expenses.any((e) => e.date == dateStr);
+                  final hasEntry = datesWithExpense.contains(dateStr);
                   if (!hasEntry) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -235,85 +272,93 @@ class _CalendarViewState extends State<CalendarView> {
                     ),
                   );
                 },
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(6),
                 child: Container(
-                  margin: const EdgeInsets.all(2),
-                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+                  margin: const EdgeInsets.all(cellMargin),
+                  padding: EdgeInsets.symmetric(
+                    vertical: h >= 34 ? 2 : 1,
+                    horizontal: 0,
+                  ),
                   decoration: BoxDecoration(
                     color: cellBg,
                     border: Border.all(color: borderColor, width: borderWidth),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(6),
                     boxShadow: isSelected || isToday
                         ? [
                             BoxShadow(
                               color: (isSelected ? selectedBorder : Theme.of(context).colorScheme.primary)
-                                  .withOpacity(0.12),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
+                                  .withValues(alpha: 0.1),
+                              blurRadius: 4,
+                              offset: const Offset(0, 1),
                             ),
                           ]
                         : null,
                   ),
                   child: Stack(
-                    alignment: Alignment.center,
+                    fit: StackFit.expand,
                     children: [
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '$dayNum',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: isSelected || isToday ? FontWeight.w800 : FontWeight.w600,
-                              color: isSelected
-                                  ? selectedBorder
-                                  : isToday
-                                      ? Theme.of(context).colorScheme.primary
-                                      : isWeekend
-                                          ? Colors.red.shade400
-                                          : Colors.grey.shade800,
-                            ),
-                          ),
-                          if (totals != null && totals.spent > 0)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Text(
-                                _formatAmount(totals.spent),
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.red.shade600,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                      Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '$dayNum',
+                              style: TextStyle(
+                                fontSize: dayFont,
+                                fontWeight: isSelected || isToday ? FontWeight.w800 : FontWeight.w600,
+                                color: isSelected
+                                    ? selectedBorder
+                                    : isToday
+                                        ? Theme.of(context).colorScheme.primary
+                                        : isWeekend
+                                            ? Colors.red.shade400
+                                            : Colors.grey.shade800,
                               ),
                             ),
-                          if (totals != null && totals.received > 0)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 1),
-                              child: Text(
-                                _formatAmount(totals.received),
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.green.shade700,
+                            if (totals != null && totals.spent > 0)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 1),
+                                child: Text(
+                                  _formatAmount(totals.spent),
+                                  style: TextStyle(
+                                    fontSize: amtFont,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.red.shade600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                          const SizedBox(height: 10),
-                        ],
+                            if (totals != null && totals.received > 0)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 1),
+                                child: Text(
+                                  _formatAmount(totals.received),
+                                  style: TextStyle(
+                                    fontSize: amtFont,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.green.shade700,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                       if (hasExpense)
                         Positioned(
-                          bottom: 4,
-                          child: Container(
-                            width: 6,
-                            height: 6,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFDC2626),
-                              shape: BoxShape.circle,
+                          bottom: 2,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: Container(
+                              width: dotSize,
+                              height: dotSize,
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFDC2626),
+                                shape: BoxShape.circle,
+                              ),
                             ),
                           ),
                         ),
@@ -323,8 +368,9 @@ class _CalendarViewState extends State<CalendarView> {
               ),
             ),
           );
-        }),
-      ),
+          }),
+        );
+      },
     );
   }
 

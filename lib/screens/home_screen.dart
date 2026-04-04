@@ -123,9 +123,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       return;
     }
     setState(() => _selectedMonth = clamped);
-    await context.read<IncomeProvider>().loadIncomeForMonth(
-      DateFormat('yyyy-MM').format(_selectedMonth),
-    );
+    final monthKey = DateFormat('yyyy-MM').format(clamped);
+    // Load income after this frame so PageView / month swipe isn’t fighting DB + notifyListeners on the same frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<IncomeProvider>().loadIncomeForMonth(monthKey);
+    });
   }
 
   Future<void> _changeMonth(int delta) async {
@@ -181,45 +184,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.chevron_left_rounded),
-                    onPressed: () => _changeMonth(-1),
-                  ),
-                  Text(
-                    DateFormat('MMMM yyyy').format(_selectedMonth),
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 17,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.chevron_right_rounded,
-                      color: _isCurrentMonth ? Colors.grey.shade300 : null,
-                    ),
-                    onPressed: _isCurrentMonth ? null : () => _changeMonth(1),
-                  ),
-                ],
-              ),
-            ),
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+            child: _buildMonthNavigator(theme),
           ),
 
           _buildSummaryCards(
@@ -242,19 +208,22 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 ),
               ],
             ),
-            child: TabBar(
-              controller: _tabController,
-              labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-              unselectedLabelColor: Colors.grey.shade500,
-              labelColor: theme.colorScheme.primary,
-              indicatorColor: theme.colorScheme.primary,
-              indicatorWeight: 3,
-              onTap: _onTabDoubleTap,
-              tabs: const [
-                Tab(text: 'Daily'),
-                Tab(text: 'Calendar'),
-                Tab(text: 'Monthly'),
-              ],
+            child: SizedBox(
+              height: 44,
+              child: TabBar(
+                controller: _tabController,
+                labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                unselectedLabelColor: Colors.grey.shade500,
+                labelColor: theme.colorScheme.primary,
+                indicatorColor: theme.colorScheme.primary,
+                indicatorWeight: 2.5,
+                onTap: _onTabDoubleTap,
+                tabs: const [
+                  Tab(text: 'Daily'),
+                  Tab(text: 'Calendar'),
+                  Tab(text: 'Monthly'),
+                ],
+              ),
             ),
           ),
 
@@ -375,6 +344,58 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
+  /// Slim month strip (all tabs) — less vertical padding under the app bar.
+  Widget _buildMonthNavigator(ThemeData theme) {
+    final monthStyle = theme.textTheme.titleMedium?.copyWith(
+      fontWeight: FontWeight.w800,
+      fontSize: 15,
+      letterSpacing: -0.3,
+    );
+    final btnStyle = IconButton.styleFrom(
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      minimumSize: const Size(36, 34),
+      padding: EdgeInsets.zero,
+      visualDensity: VisualDensity.compact,
+    );
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          IconButton(
+            style: btnStyle,
+            icon: const Icon(Icons.chevron_left_rounded, size: 22),
+            onPressed: () => _changeMonth(-1),
+          ),
+          Text(
+            DateFormat('MMMM yyyy').format(_selectedMonth),
+            style: monthStyle,
+          ),
+          IconButton(
+            style: btnStyle,
+            icon: Icon(
+              Icons.chevron_right_rounded,
+              size: 22,
+              color: _isCurrentMonth ? Colors.grey.shade300 : null,
+            ),
+            onPressed: _isCurrentMonth ? null : () => _changeMonth(1),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSummaryCards({
     required double carryForward,
     required double income,
@@ -383,39 +404,34 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              flex: 3,
-              child: _FintechSummaryCard(
-                label: 'Income',
-                value: income,
-                accent: const Color(0xFF2563EB),
-                icon: Icons.south_west_rounded,
-              ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: _FintechSummaryCard(
+              label: 'Income',
+              value: income,
+              accent: const Color(0xFF2563EB),
+              icon: Icons.south_west_rounded,
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              flex: 3,
-              child: _FintechSummaryCard(
-                label: 'Expense',
-                value: spent,
-                accent: const Color(0xFFDC2626),
-                icon: Icons.north_east_rounded,
-              ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _FintechSummaryCard(
+              label: 'Expense',
+              value: spent,
+              accent: const Color(0xFFDC2626),
+              icon: Icons.north_east_rounded,
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              flex: 4,
-              child: _BalanceSummaryCard(
-                carryForward: carryForward,
-                balance: total,
-              ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _BalanceSummaryCard(
+              carryForward: carryForward,
+              balance: total,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -582,6 +598,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 }
 
+/// Reserved under the main amount so Income / Expense / Balance cards stay one height.
+const double _kSummaryFooterSlotHeight = 30;
+
 class _BalanceSummaryCard extends StatelessWidget {
   final double carryForward;
   final double balance;
@@ -601,15 +620,15 @@ class _BalanceSummaryCard extends StatelessWidget {
         : const Color(0xFFFFEDD5).withValues(alpha: 0.7);
 
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+      padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 6),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.07),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -617,70 +636,75 @@ class _BalanceSummaryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(6),
+            padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(
               color: accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(7),
             ),
-            child: Icon(Icons.account_balance_wallet_rounded, size: 18, color: accent),
+            child: Icon(Icons.account_balance_wallet_rounded, size: 16, color: accent),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 5),
           Text(
             'BALANCE',
             style: TextStyle(
-              fontSize: 10,
+              fontSize: 9,
               fontWeight: FontWeight.w700,
               color: Colors.grey.shade600,
-              letterSpacing: 0.6,
+              letterSpacing: 0.5,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
             '₹${balance.toStringAsFixed(0)}',
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: FontWeight.w800,
               color: accent,
               height: 1.05,
             ),
           ),
-          if (hasCarry) ...[
-            const SizedBox(height: 5),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-              decoration: BoxDecoration(
-                color: carryBg,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: carryColor.withValues(alpha: 0.22)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.swap_horiz_rounded, size: 12, color: carryColor),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      'Carry forward',
-                      style: TextStyle(
-                        fontSize: 8,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade700,
-                        height: 1.05,
-                      ),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: _kSummaryFooterSlotHeight,
+            width: double.infinity,
+            child: hasCarry
+                ? Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: carryBg,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: carryColor.withValues(alpha: 0.22)),
                     ),
-                  ),
-                  Text(
-                    '₹${carryForward.toStringAsFixed(0)}',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      color: carryColor,
+                    child: Row(
+                      children: [
+                        Icon(Icons.swap_horiz_rounded, size: 11, color: carryColor),
+                        const SizedBox(width: 3),
+                        Expanded(
+                          child: Text(
+                            'Carry forward',
+                            style: TextStyle(
+                              fontSize: 8,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade700,
+                              height: 1.05,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text(
+                          '₹${carryForward.toStringAsFixed(0)}',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: carryColor,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+                  )
+                : const SizedBox.shrink(),
+          ),
         ],
       ),
     );
@@ -703,15 +727,15 @@ class _FintechSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
+      padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 6),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.07),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -719,33 +743,35 @@ class _FintechSummaryCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(6),
+            padding: const EdgeInsets.all(5),
             decoration: BoxDecoration(
               color: accent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(7),
             ),
-            child: Icon(icon, size: 18, color: accent),
+            child: Icon(icon, size: 16, color: accent),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 5),
           Text(
             label.toUpperCase(),
             style: TextStyle(
-              fontSize: 10,
+              fontSize: 9,
               fontWeight: FontWeight.w700,
               color: Colors.grey.shade600,
-              letterSpacing: 0.6,
+              letterSpacing: 0.5,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             '₹${value.toStringAsFixed(0)}',
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: FontWeight.w800,
               color: accent,
               height: 1.05,
             ),
           ),
+          const SizedBox(height: 4),
+          const SizedBox(height: _kSummaryFooterSlotHeight),
         ],
       ),
     );
