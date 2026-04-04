@@ -1,22 +1,35 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/expense_provider.dart';
 import 'providers/income_provider.dart';
 import 'providers/category_provider.dart';
+import 'providers/app_navigation_hub.dart';
 import 'screens/home_screen.dart';
+import 'services/expense_reminder_service.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const ExpenseTrackerApp());
+  final appNavHub = AppNavigationHub();
+  if (!kIsWeb) {
+    ExpenseReminderService.onReminderNotificationTap =
+        () => appNavHub.requestHomeDashboard();
+    await ExpenseReminderService.instance.initialize();
+    await ExpenseReminderService.instance.rescheduleIfEnabled();
+  }
+  runApp(ExpenseTrackerApp(navHub: appNavHub));
 }
 
 class ExpenseTrackerApp extends StatelessWidget {
-  const ExpenseTrackerApp({super.key});
+  const ExpenseTrackerApp({super.key, required this.navHub});
+
+  final AppNavigationHub navHub;
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider<AppNavigationHub>.value(value: navHub),
         ChangeNotifierProvider(create: (_) => ExpenseProvider()),
         ChangeNotifierProvider(create: (_) => IncomeProvider()),
         ChangeNotifierProvider(create: (_) => CategoryProvider()),

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -5,6 +6,8 @@ import '../providers/expense_provider.dart';
 import '../models/expense.dart';
 import '../providers/income_provider.dart';
 import '../providers/category_provider.dart';
+import '../providers/app_navigation_hub.dart';
+import '../services/expense_reminder_service.dart';
 import '../widgets/expense_tile.dart';
 import '../widgets/calendar_view.dart';
 import '../widgets/monthly_view.dart';
@@ -30,17 +33,37 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   DateTime _lastTapTime = DateTime.now();
   final Set<String> _collapsedDates = {};
   int? _selectedExpenseId;
+  AppNavigationHub? _navHub;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _afterFirstFrame());
+  }
+
+  Future<void> _afterFirstFrame() async {
+    if (!mounted) return;
+    await _loadData();
+    if (!mounted) return;
+    if (!kIsWeb) {
+      _navHub = context.read<AppNavigationHub>();
+      _navHub!.addListener(_onHomeDashboardRequested);
+      if (await ExpenseReminderService.instance.launchedFromReminderNotification()) {
+        if (mounted) _goHome();
+      }
+    }
+  }
+
+  void _onHomeDashboardRequested() {
+    if (!mounted) return;
+    _goHome();
   }
 
   @override
   void dispose() {
+    _navHub?.removeListener(_onHomeDashboardRequested);
     _tabController.dispose();
     super.dispose();
   }

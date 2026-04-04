@@ -18,6 +18,9 @@ dependencies:
   share_plus: ^10.1.4
   file_picker: ^8.1.7
   shared_preferences: ^2.3.3
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.10.0
+  flutter_timezone: ^4.1.0
 
 dev_dependencies:
   flutter_test:
