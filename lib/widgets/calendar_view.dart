@@ -209,7 +209,6 @@ class _CalendarViewState extends State<CalendarView> {
         final dayFont = (h * 0.30).clamp(10.0, 13.0);
         final amtFont = (h * 0.17).clamp(6.5, 8.0);
         const cellMargin = 1.0;
-        final dotSize = h >= 36 ? 4.0 : 3.0;
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -228,7 +227,6 @@ class _CalendarViewState extends State<CalendarView> {
           final isToday = dateStr == todayStr;
           final isWeekend = colIndex == 0 || colIndex == 6;
           final isSelected = _selectedDateStr == dateStr;
-          final hasExpense = datesWithExpense.contains(dateStr);
 
           Color? cellBg;
           Color borderColor;
@@ -294,75 +292,72 @@ class _CalendarViewState extends State<CalendarView> {
                           ]
                         : null,
                   ),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '$dayNum',
-                              style: TextStyle(
-                                fontSize: dayFont,
-                                fontWeight: isSelected || isToday ? FontWeight.w800 : FontWeight.w600,
-                                color: isSelected
-                                    ? selectedBorder
-                                    : isToday
-                                        ? Theme.of(context).colorScheme.primary
-                                        : isWeekend
-                                            ? Colors.red.shade400
-                                            : Colors.grey.shade800,
-                              ),
-                            ),
-                            if (totals != null && totals.spent > 0)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 1),
-                                child: Text(
-                                  _formatAmount(totals.spent),
-                                  style: TextStyle(
-                                    fontSize: amtFont,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.red.shade600,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            if (totals != null && totals.received > 0)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 1),
-                                child: Text(
-                                  _formatAmount(totals.received),
-                                  style: TextStyle(
-                                    fontSize: amtFont,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.green.shade700,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                          ],
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$dayNum',
+                          style: TextStyle(
+                            fontSize: dayFont,
+                            fontWeight: isSelected || isToday ? FontWeight.w800 : FontWeight.w600,
+                            color: isSelected
+                                ? selectedBorder
+                                : isToday
+                                    ? Theme.of(context).colorScheme.primary
+                                    : isWeekend
+                                        ? Colors.red.shade400
+                                        : Colors.grey.shade800,
+                          ),
                         ),
-                      ),
-                      if (hasExpense)
-                        Positioned(
-                          bottom: 2,
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: Container(
-                              width: dotSize,
-                              height: dotSize,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFDC2626),
-                                shape: BoxShape.circle,
+                        if (totals != null &&
+                            (totals.spent > 0 || totals.received > 0))
+                          Padding(
+                            padding: const EdgeInsets.only(top: 1),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (totals.spent > 0)
+                                    Text(
+                                      _formatAmount(totals.spent),
+                                      style: TextStyle(
+                                        fontSize: amtFont,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.red.shade600,
+                                        height: 1,
+                                      ),
+                                    ),
+                                  if (totals.spent > 0 && totals.received > 0)
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                                      child: Text(
+                                        '·',
+                                        style: TextStyle(
+                                          fontSize: amtFont,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.grey.shade500,
+                                          height: 1,
+                                        ),
+                                      ),
+                                    ),
+                                  if (totals.received > 0)
+                                    Text(
+                                      _formatAmount(totals.received),
+                                      style: TextStyle(
+                                        fontSize: amtFont,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.green.shade700,
+                                        height: 1,
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
