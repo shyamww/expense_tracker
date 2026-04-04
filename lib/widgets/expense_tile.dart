@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../models/expense.dart';
-import '../constants/categories.dart';
+import '../providers/category_provider.dart';
 
 class ExpenseTile extends StatelessWidget {
   final Expense expense;
@@ -19,7 +20,8 @@ class ExpenseTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final info = getCategoryInfo(expense.category);
+    final cat = context.watch<CategoryProvider>();
+    final info = cat.resolveVisual(expense.category);
     final created = DateTime.tryParse(expense.createdAt);
     final dayOnly = DateTime.tryParse(expense.date);
     final dateStr = created != null

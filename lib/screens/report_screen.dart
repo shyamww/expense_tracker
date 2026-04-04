@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../providers/expense_provider.dart';
 import '../models/expense.dart';
-import '../constants/categories.dart';
+import '../providers/category_provider.dart';
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({super.key});
@@ -72,6 +72,7 @@ class _ReportScreenState extends State<ReportScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final catProv = context.watch<CategoryProvider>();
 
     return Scaffold(
       appBar: AppBar(
@@ -185,7 +186,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 const SizedBox(height: 20),
                 // Category List
                 ..._categoryTotals.entries.map((entry) {
-                  final info = getCategoryInfo(entry.key);
+                  final info = catProv.resolveVisual(entry.key);
                   final percentage =
                       _total > 0 ? (entry.value / _total * 100) : 0.0;
                   return Container(
@@ -326,8 +327,9 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   List<PieChartSectionData> _buildPieChartSections() {
+    final catProv = context.read<CategoryProvider>();
     return _categoryTotals.entries.map((entry) {
-      final info = getCategoryInfo(entry.key);
+      final info = catProv.resolveVisual(entry.key);
       final percentage = _total > 0 ? (entry.value / _total * 100) : 0.0;
 
       return PieChartSectionData(

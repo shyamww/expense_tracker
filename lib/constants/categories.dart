@@ -12,7 +12,17 @@ class CategoryInfo {
   });
 }
 
-const List<CategoryInfo> appCategories = [
+/// ARGB int for persistence (SQLite / JSON).
+int encodeMaterialColor(Color c) {
+  final a = (c.a * 255).round() & 0xFF;
+  final r = (c.r * 255).round() & 0xFF;
+  final g = (c.g * 255).round() & 0xFF;
+  final b = (c.b * 255).round() & 0xFF;
+  return (a << 24) | (r << 16) | (g << 8) | b;
+}
+
+/// Shipped defaults; also used to seed the database on first install / migration.
+const List<CategoryInfo> defaultCategoryInfos = [
   CategoryInfo(
     name: 'Food',
     icon: Icons.restaurant,
@@ -45,13 +55,19 @@ const List<CategoryInfo> appCategories = [
   ),
 ];
 
+/// Fallback styling for expense strings that are not in the user’s category list.
+CategoryInfo unknownCategoryInfo(String name) => CategoryInfo(
+      name: name,
+      icon: Icons.label_outline_rounded,
+      color: const Color(0xFF78909C),
+    );
+
+@Deprecated('Use CategoryProvider / defaultCategoryInfos')
+List<CategoryInfo> get appCategories => defaultCategoryInfos;
+
 CategoryInfo getCategoryInfo(String name) {
-  return appCategories.firstWhere(
-    (c) => c.name == name,
-    orElse: () => const CategoryInfo(
-      name: 'Other',
-      icon: Icons.category,
-      color: Color(0xFF78909C),
-    ),
-  );
+  for (final c in defaultCategoryInfos) {
+    if (c.name == name) return c;
+  }
+  return unknownCategoryInfo(name);
 }

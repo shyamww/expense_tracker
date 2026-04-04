@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../providers/expense_provider.dart';
 import '../models/expense.dart';
 import '../providers/income_provider.dart';
+import '../providers/category_provider.dart';
 import '../widgets/expense_tile.dart';
 import '../widgets/calendar_view.dart';
 import '../widgets/monthly_view.dart';
@@ -77,8 +78,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     if (!mounted) return;
     final expenseProvider = context.read<ExpenseProvider>();
     final incomeProvider = context.read<IncomeProvider>();
+    final categoryProvider = context.read<CategoryProvider>();
     await expenseProvider.loadExpenses();
     await incomeProvider.loadIncomeForCurrentMonth();
+    await categoryProvider.loadCategories();
   }
 
   bool get _isCurrentMonth {

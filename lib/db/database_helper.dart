@@ -5,6 +5,8 @@ import 'package:path/path.dart' as p;
 import '../models/expense.dart';
 import '../models/income.dart';
 import '../models/income_entry.dart';
+import '../models/expense_category.dart';
+import '../data/category_seed_data.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -15,9 +17,11 @@ class DatabaseHelper {
   final List<Map<String, dynamic>> _webExpenses = [];
   final List<Map<String, dynamic>> _webIncome = [];
   final List<Map<String, dynamic>> _webIncomeHistory = [];
+  final List<Map<String, dynamic>> _webExpenseCategories = [];
   int _nextExpenseId = 1;
   int _nextIncomeId = 1;
   int _nextIncomeHistoryId = 1;
+  int _nextCategoryId = 1;
 
   // ── Mobile SQLite ──
   Database? _database;
@@ -28,7 +32,7 @@ class DatabaseHelper {
     final path = p.join(dbPath, 'expense_tracker.db');
     _database = await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -62,6 +66,17 @@ class DatabaseHelper {
         created_at TEXT NOT NULL
       )
     ''');
+    await db.execute('''
+      CREATE TABLE expense_categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        icon_code_point INTEGER NOT NULL,
+        color INTEGER NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        system_locked INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+    await _insertSeedExpenseCategories(db);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -76,6 +91,196 @@ class DatabaseHelper {
         )
       ''');
     }
+    if (oldVersion < 3) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS expense_categories (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          icon_code_point INTEGER NOT NULL,
+          color INTEGER NOT NULL,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          system_locked INTEGER NOT NULL DEFAULT 0
+        )
+      ''');
+      await _insertSeedExpenseCategories(db);
+      await _ensureExpenseCategoryRowsForOrphans(db);
+    }
+  }
+
+  Future<void> _insertSeedExpenseCategories(DatabaseExecutor db) async {
+    for (final c in buildSeededExpenseCategories()) {
+      await db.rawInsert(
+        '''
+        INSERT OR IGNORE INTO expense_categories (name, icon_code_point, color, sort_order, system_locked)
+        VALUES (?, ?, ?, ?, ?)
+        ''',
+        [
+          c.name,
+          c.iconCodePoint,
+          c.colorValue,
+          c.sortOrder,
+          c.systemLocked ? 1 : 0,
+        ],
+      );
+    }
+  }
+
+  Future<void> _ensureExpenseCategoryRowsForOrphans(DatabaseExecutor db) async {
+    final dist = await db.rawQuery('SELECT DISTINCT category FROM expenses');
+    final existing = await db.query('expense_categories');
+    final names = existing.map((m) => m['name'] as String).toSet();
+    var maxOrder = 0;
+    for (final r in existing) {
+      final o = (r['sort_order'] as num?)?.toInt() ?? 0;
+      if (o > maxOrder) maxOrder = o;
+    }
+    for (final r in dist) {
+      final cat = r['category'] as String;
+      if (cat.isEmpty || names.contains(cat)) continue;
+      maxOrder++;
+      await db.insert('expense_categories', {
+        'name': cat,
+        'icon_code_point': kUnknownCategoryIconCodePoint,
+        'color': 0xFF78909C,
+        'sort_order': maxOrder,
+        'system_locked': 0,
+      });
+      names.add(cat);
+    }
+  }
+
+  // ── Expense categories ──
+
+  Future<List<ExpenseCategory>> getExpenseCategories() async {
+    if (kIsWeb) {
+      if (_webExpenseCategories.isEmpty) {
+        for (final c in buildSeededExpenseCategories()) {
+          _webExpenseCategories.add({
+            'id': _nextCategoryId++,
+            'name': c.name,
+            'icon_code_point': c.iconCodePoint,
+            'color': c.colorValue,
+            'sort_order': c.sortOrder,
+            'system_locked': c.systemLocked ? 1 : 0,
+          });
+        }
+      }
+      final sorted = List<Map<String, dynamic>>.from(_webExpenseCategories)
+        ..sort((a, b) => ((a['sort_order'] as num?)?.toInt() ?? 0)
+            .compareTo((b['sort_order'] as num?)?.toInt() ?? 0));
+      return sorted.map((m) => ExpenseCategory.fromMap(m)).toList();
+    }
+    final db = await _getDb();
+    final maps = await db.query('expense_categories', orderBy: 'sort_order ASC, name ASC');
+    return maps.map((m) => ExpenseCategory.fromMap(m)).toList();
+  }
+
+  Future<int> insertExpenseCategory(ExpenseCategory c) async {
+    final row = {
+      'name': c.name.trim(),
+      'icon_code_point': c.iconCodePoint,
+      'color': c.colorValue,
+      'sort_order': c.sortOrder,
+      'system_locked': c.systemLocked ? 1 : 0,
+    };
+    if (kIsWeb) {
+      if (_webExpenseCategories.any((m) => (m['name'] as String) == row['name'])) {
+        throw StateError('duplicate_name');
+      }
+      final map = Map<String, dynamic>.from(row);
+      map['id'] = _nextCategoryId++;
+      _webExpenseCategories.add(map);
+      return map['id'] as int;
+    }
+    final db = await _getDb();
+    return await db.insert('expense_categories', row);
+  }
+
+  Future<void> updateExpenseCategory(ExpenseCategory c, {required String previousName}) async {
+    if (c.id == null) return;
+    final row = {
+      'name': c.name.trim(),
+      'icon_code_point': c.iconCodePoint,
+      'color': c.colorValue,
+      'sort_order': c.sortOrder,
+      'system_locked': c.systemLocked ? 1 : 0,
+    };
+    if (kIsWeb) {
+      final idx = _webExpenseCategories.indexWhere((m) => m['id'] == c.id);
+      if (idx == -1) return;
+      final trimmed = c.name.trim();
+      final dup = _webExpenseCategories.any(
+        (m) => m['id'] != c.id && (m['name'] as String) == trimmed,
+      );
+      if (dup) throw StateError('duplicate_name');
+      _webExpenseCategories[idx] = {...row, 'id': c.id};
+      if (previousName != trimmed) {
+        for (final e in _webExpenses) {
+          if (e['category'] == previousName) e['category'] = trimmed;
+        }
+      }
+      return;
+    }
+    final db = await _getDb();
+    await db.transaction((txn) async {
+      if (previousName != c.name.trim()) {
+        await txn.update(
+          'expenses',
+          {'category': c.name.trim()},
+          where: 'category = ?',
+          whereArgs: [previousName],
+        );
+      }
+      await txn.update(
+        'expense_categories',
+        row,
+        where: 'id = ?',
+        whereArgs: [c.id],
+      );
+    });
+  }
+
+  Future<int> countExpensesWithCategory(String categoryName) async {
+    if (kIsWeb) {
+      return _webExpenses.where((m) => m['category'] == categoryName).length;
+    }
+    final db = await _getDb();
+    final r = await db.rawQuery(
+      'SELECT COUNT(*) as n FROM expenses WHERE category = ?',
+      [categoryName],
+    );
+    final raw = r.first['n'];
+    if (raw is int) return raw;
+    if (raw is num) return raw.toInt();
+    return 0;
+  }
+
+  Future<void> reassignExpensesCategory({
+    required String fromName,
+    required String toName,
+  }) async {
+    if (kIsWeb) {
+      for (final e in _webExpenses) {
+        if (e['category'] == fromName) e['category'] = toName;
+      }
+      return;
+    }
+    final db = await _getDb();
+    await db.update(
+      'expenses',
+      {'category': toName},
+      where: 'category = ?',
+      whereArgs: [fromName],
+    );
+  }
+
+  Future<void> deleteExpenseCategoryById(int id) async {
+    if (kIsWeb) {
+      _webExpenseCategories.removeWhere((m) => m['id'] == id);
+      return;
+    }
+    final db = await _getDb();
+    await db.delete('expense_categories', where: 'id = ?', whereArgs: [id]);
   }
 
   // ── Expense CRUD ──
@@ -449,10 +654,20 @@ class DatabaseHelper {
     final expenses = await getAllExpenses();
     final incomeList = await _getAllIncome();
     final historyList = await _getAllIncomeHistory();
+    final categoryRows = await getExpenseCategories();
 
     final data = {
-      'version': 2,
+      'version': 3,
       'exported_at': DateTime.now().toIso8601String(),
+      'expense_categories': categoryRows
+          .map((c) => {
+                'name': c.name,
+                'icon_code_point': c.iconCodePoint,
+                'color': c.colorValue,
+                'sort_order': c.sortOrder,
+                'system_locked': c.systemLocked ? 1 : 0,
+              })
+          .toList(),
       'expenses': expenses.map((e) => {
         'amount': e.amount,
         'category': e.category,
@@ -480,14 +695,17 @@ class DatabaseHelper {
     final expensesList = data['expenses'] as List<dynamic>? ?? [];
     final incomeList = data['income'] as List<dynamic>? ?? [];
     final historyList = data['income_history'] as List<dynamic>? ?? [];
+    final catList = data['expense_categories'] as List<dynamic>?;
 
     if (kIsWeb) {
       _webExpenses.clear();
       _webIncome.clear();
       _webIncomeHistory.clear();
+      _webExpenseCategories.clear();
       _nextExpenseId = 1;
       _nextIncomeId = 1;
       _nextIncomeHistoryId = 1;
+      _nextCategoryId = 1;
 
       for (final e in expensesList) {
         final map = Map<String, dynamic>.from(e as Map);
@@ -510,6 +728,22 @@ class DatabaseHelper {
         }
         _webIncomeHistory.add(map);
       }
+      if (catList != null && catList.isNotEmpty) {
+        for (final raw in catList) {
+          final m = Map<String, dynamic>.from(raw as Map);
+          _webExpenseCategories.add({
+            'id': _nextCategoryId++,
+            'name': m['name'] as String,
+            'icon_code_point': (m['icon_code_point'] as num).toInt(),
+            'color': (m['color'] as num).toInt(),
+            'sort_order': (m['sort_order'] as num?)?.toInt() ?? 0,
+            'system_locked': (m['system_locked'] as num?)?.toInt() ?? 0,
+          });
+        }
+      } else {
+        await _insertSeedExpenseCategoriesWeb();
+        await _ensureExpenseCategoryRowsForOrphansWeb();
+      }
       return;
     }
 
@@ -518,6 +752,7 @@ class DatabaseHelper {
       await txn.delete('expenses');
       await txn.delete('income');
       await txn.delete('income_history');
+      await txn.delete('expense_categories');
 
       for (final e in expensesList) {
         final map = Map<String, dynamic>.from(e as Map);
@@ -527,6 +762,23 @@ class DatabaseHelper {
         map.remove('id');
         await txn.insert('expenses', map);
       }
+
+      if (catList != null && catList.isNotEmpty) {
+        for (final raw in catList) {
+          final m = Map<String, dynamic>.from(raw as Map);
+          await txn.insert('expense_categories', {
+            'name': m['name'] as String,
+            'icon_code_point': (m['icon_code_point'] as num).toInt(),
+            'color': (m['color'] as num).toInt(),
+            'sort_order': (m['sort_order'] as num?)?.toInt() ?? 0,
+            'system_locked': (m['system_locked'] as num?)?.toInt() ?? 0,
+          });
+        }
+      } else {
+        await _insertSeedExpenseCategories(txn);
+        await _ensureExpenseCategoryRowsForOrphans(txn);
+      }
+
       for (final i in incomeList) {
         final map = Map<String, dynamic>.from(i as Map);
         map.remove('id');
@@ -541,5 +793,43 @@ class DatabaseHelper {
         await txn.insert('income_history', map);
       }
     });
+  }
+
+  Future<void> _insertSeedExpenseCategoriesWeb() async {
+    for (final c in buildSeededExpenseCategories()) {
+      _webExpenseCategories.add({
+        'id': _nextCategoryId++,
+        'name': c.name,
+        'icon_code_point': c.iconCodePoint,
+        'color': c.colorValue,
+        'sort_order': c.sortOrder,
+        'system_locked': c.systemLocked ? 1 : 0,
+      });
+    }
+  }
+
+  Future<void> _ensureExpenseCategoryRowsForOrphansWeb() async {
+    final names = _webExpenseCategories.map((m) => m['name'] as String).toSet();
+    var maxOrder = _webExpenseCategories.fold<int>(
+      0,
+      (m, r) {
+        final o = (r['sort_order'] as num?)?.toInt() ?? 0;
+        return o > m ? o : m;
+      },
+    );
+    for (final e in _webExpenses) {
+      final cat = e['category'] as String;
+      if (cat.isEmpty || names.contains(cat)) continue;
+      maxOrder++;
+      _webExpenseCategories.add({
+        'id': _nextCategoryId++,
+        'name': cat,
+        'icon_code_point': kUnknownCategoryIconCodePoint,
+        'color': 0xFF78909C,
+        'sort_order': maxOrder,
+        'system_locked': 0,
+      });
+      names.add(cat);
+    }
   }
 }

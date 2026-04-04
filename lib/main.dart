@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/expense_provider.dart';
 import 'providers/income_provider.dart';
+import 'providers/category_provider.dart';
 import 'screens/home_screen.dart';
 
 void main() {
@@ -18,6 +19,7 @@ class ExpenseTrackerApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => ExpenseProvider()),
         ChangeNotifierProvider(create: (_) => IncomeProvider()),
+        ChangeNotifierProvider(create: (_) => CategoryProvider()),
       ],
       child: MaterialApp(
         title: 'Expense Tracker',

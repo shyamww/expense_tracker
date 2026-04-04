@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'category_management_screen.dart';
+
 /// Placeholder settings; extend as you add preferences (theme, currency, etc.).
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -44,6 +46,17 @@ class SettingsScreen extends StatelessWidget {
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Theme options will be added here.')),
+              );
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.category_outlined, color: Colors.grey.shade700),
+            title: const Text('Categories'),
+            subtitle: const Text('Add, edit, or delete expense categories'),
+            onTap: () {
+              Navigator.push<void>(
+                context,
+                MaterialPageRoute(builder: (_) => const CategoryManagementScreen()),
               );
             },
           ),

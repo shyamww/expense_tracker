@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/expense.dart';
 import '../providers/expense_provider.dart';
-import '../constants/categories.dart';
+import '../providers/category_provider.dart';
 import '../widgets/category_chip.dart';
 
 class AddExpenseScreen extends StatefulWidget {
@@ -46,6 +46,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     } else {
       _selectedDateTime = DateTime.now();
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final cp = context.read<CategoryProvider>();
+      if (cp.categories.isEmpty) cp.loadCategories();
+    });
   }
 
   @override
@@ -194,16 +199,32 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   ),
             ),
             const SizedBox(height: 10),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: appCategories.map((cat) {
-                return CategoryChip(
-                  category: cat,
-                  selected: _selectedCategory == cat.name,
-                  onTap: () => setState(() => _selectedCategory = cat.name),
+            Consumer<CategoryProvider>(
+              builder: (context, cat, _) {
+                if (cat.categories.isEmpty) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 20),
+                    child: Center(
+                      child: Text(
+                        'Loading categories…',
+                        style: TextStyle(color: Colors.grey.shade600),
+                      ),
+                    ),
+                  );
+                }
+                return Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: cat.categories.map((c) {
+                    final info = c.toCategoryInfo();
+                    return CategoryChip(
+                      category: info,
+                      selected: _selectedCategory == c.name,
+                      onTap: () => setState(() => _selectedCategory = c.name),
+                    );
+                  }).toList(),
                 );
-              }).toList(),
+              },
             ),
 
             const SizedBox(height: 24),
