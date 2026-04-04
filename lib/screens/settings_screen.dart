@@ -4,6 +4,7 @@ import '../services/expense_reminder_service.dart';
 import '../widgets/feedback_form_sheet.dart';
 import 'backup_screen.dart';
 import 'category_management_screen.dart';
+import 'account_management_screen.dart';
 
 /// Placeholder settings; extend as you add preferences (theme, currency, etc.).
 class SettingsScreen extends StatelessWidget {
@@ -57,6 +58,17 @@ class SettingsScreen extends StatelessWidget {
               Navigator.push<void>(
                 context,
                 MaterialPageRoute(builder: (_) => const CategoryManagementScreen()),
+              );
+            },
+          ),
+          ListTile(
+            leading: Icon(Icons.account_balance_outlined, color: Colors.grey.shade700),
+            title: const Text('Accounts'),
+            subtitle: const Text('Banks and cash — used when adding income or expenses'),
+            onTap: () {
+              Navigator.push<void>(
+                context,
+                MaterialPageRoute(builder: (_) => const AccountManagementScreen()),
               );
             },
           ),

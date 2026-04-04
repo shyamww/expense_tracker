@@ -72,7 +72,8 @@ Future<void> showIncomeHistoryActionsSheet({
                   );
                   if (confirmed == true && context.mounted) {
                     await DatabaseHelper().deleteIncomeHistoryEntry(entry.id!);
-                    if (onRefresh != null) await onRefresh!();
+                    final refresh = onRefresh;
+                    if (refresh != null) await refresh();
                   }
                 },
               ),

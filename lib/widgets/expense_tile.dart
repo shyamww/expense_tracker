@@ -81,6 +81,16 @@ class ExpenseTile extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
+                      if (expense.account.isNotEmpty)
+                        Text(
+                          expense.account,
+                          style: TextStyle(
+                            color: Colors.grey.shade500,
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       Text(
                         dateStr,
                         style: TextStyle(

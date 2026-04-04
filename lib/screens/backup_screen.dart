@@ -7,6 +7,7 @@ import '../db/database_helper.dart';
 import '../providers/expense_provider.dart';
 import '../providers/income_provider.dart';
 import '../providers/category_provider.dart';
+import '../providers/account_provider.dart';
 import 'backup_io.dart' if (dart.library.html) 'backup_web.dart' as platform;
 
 class BackupScreen extends StatefulWidget {
@@ -93,6 +94,7 @@ class _BackupScreenState extends State<BackupScreen> {
         await context.read<ExpenseProvider>().loadExpenses();
         await context.read<IncomeProvider>().loadIncomeForCurrentMonth();
         await context.read<CategoryProvider>().loadCategories();
+        await context.read<AccountProvider>().refresh();
         _showMessage('Data restored successfully!');
         Navigator.pop(context);
       }

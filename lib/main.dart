@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'providers/expense_provider.dart';
 import 'providers/income_provider.dart';
 import 'providers/category_provider.dart';
+import 'providers/account_provider.dart';
 import 'providers/app_navigation_hub.dart';
 import 'screens/home_screen.dart';
 import 'services/expense_reminder_service.dart';
@@ -33,6 +34,7 @@ class ExpenseTrackerApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ExpenseProvider()),
         ChangeNotifierProvider(create: (_) => IncomeProvider()),
         ChangeNotifierProvider(create: (_) => CategoryProvider()),
+        ChangeNotifierProvider(create: (_) => AccountProvider()),
       ],
       child: MaterialApp(
         title: 'Expense Tracker',

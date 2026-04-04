@@ -2,9 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/expense_provider.dart';
+import '../providers/income_provider.dart';
 import '../models/expense.dart';
+import '../models/income_entry.dart';
 import '../widgets/expense_tile.dart';
+import '../widgets/income_history_tile.dart';
 import '../widgets/expense_action_sheet.dart';
+
+String _dayDetailIncomeDateKey(IncomeEntry e) {
+  final dt = DateTime.tryParse(e.createdAt);
+  if (dt != null) return DateFormat('yyyy-MM-dd').format(dt);
+  return '${e.month}-01';
+}
 
 class DayDetailScreen extends StatefulWidget {
   final String date;
@@ -17,6 +26,19 @@ class DayDetailScreen extends StatefulWidget {
 
 class _DayDetailScreenState extends State<DayDetailScreen> {
   int? _selectedExpenseId;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final monthKey =
+          widget.date.length >= 7 ? widget.date.substring(0, 7) : '';
+      if (monthKey.isNotEmpty) {
+        context.read<IncomeProvider>().loadIncomeForMonth(monthKey);
+      }
+    });
+  }
 
   Future<void> _onExpenseLongPress(BuildContext context, Expense expense) async {
     if (expense.id == null) return;
@@ -33,6 +55,7 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final expenseProvider = context.watch<ExpenseProvider>();
+    final incomeProvider = context.watch<IncomeProvider>();
     final parsed = DateTime.tryParse(widget.date);
     final displayDate = parsed != null
         ? DateFormat('dd MMMM yyyy, EEEE').format(parsed)
@@ -43,12 +66,29 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
         .toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
+    final dayIncome = incomeProvider.allIncomeHistory
+        .where((e) => _dayDetailIncomeDateKey(e) == widget.date)
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
     final totalSpent = dayExpenses
         .where((e) => e.category != 'Received')
         .fold(0.0, (sum, e) => sum + e.amount);
-    final totalReceived = dayExpenses
+    final totalReceivedFromExpenses = dayExpenses
         .where((e) => e.category == 'Received')
         .fold(0.0, (sum, e) => sum + e.amount);
+    final totalIncomeEntries =
+        dayIncome.fold(0.0, (sum, e) => sum + e.amount);
+    final totalReceived = totalReceivedFromExpenses + totalIncomeEntries;
+
+    final merged = <({String createdAt, Object item})>[];
+    for (final e in dayExpenses) {
+      merged.add((createdAt: e.createdAt, item: e));
+    }
+    for (final i in dayIncome) {
+      merged.add((createdAt: i.createdAt, item: i));
+    }
+    merged.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     return Scaffold(
       appBar: AppBar(
@@ -89,7 +129,7 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
           ),
           Divider(height: 1, color: Colors.grey.shade200),
           Expanded(
-            child: dayExpenses.isEmpty
+            child: merged.isEmpty
                 ? Center(
                     child: Text(
                       'No transactions on this day',
@@ -101,16 +141,33 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.all(16),
-                    itemCount: dayExpenses.length,
+                    itemCount: merged.length,
                     itemBuilder: (context, index) {
-                      final expense = dayExpenses[index];
-                      return ExpenseTile(
-                        expense: expense,
-                        isSelected: _selectedExpenseId == expense.id,
-                        onDeselect: () => setState(() => _selectedExpenseId = null),
-                        onLongPress: expense.id == null
-                            ? null
-                            : () => _onExpenseLongPress(context, expense),
+                      final row = merged[index];
+                      final item = row.item;
+                      if (item is Expense) {
+                        final expense = item;
+                        return ExpenseTile(
+                          expense: expense,
+                          isSelected: _selectedExpenseId == expense.id,
+                          onDeselect: () =>
+                              setState(() => _selectedExpenseId = null),
+                          onLongPress: expense.id == null
+                              ? null
+                              : () => _onExpenseLongPress(context, expense),
+                        );
+                      }
+                      final entry = item as IncomeEntry;
+                      final dt = DateTime.tryParse(entry.createdAt);
+                      final dateStr = dt != null
+                          ? DateFormat('dd MMM yyyy, hh:mm a').format(dt)
+                          : '';
+                      return IncomeHistoryTile(
+                        entry: entry,
+                        dateStr: dateStr,
+                        isSelected: false,
+                        onLongPress: null,
+                        onDeselect: null,
                       );
                     },
                   ),

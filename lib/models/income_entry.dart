@@ -2,6 +2,8 @@ class IncomeEntry {
   final int? id;
   final double amount;
   final String month;
+  /// Bank / cash account this income credits.
+  final String account;
   final String note;
   final String createdAt;
 
@@ -9,6 +11,7 @@ class IncomeEntry {
     this.id,
     required this.amount,
     required this.month,
+    this.account = '',
     this.note = '',
     String? createdAt,
   }) : createdAt = createdAt ?? DateTime.now().toIso8601String();
@@ -18,6 +21,7 @@ class IncomeEntry {
       if (id != null) 'id': id,
       'amount': amount,
       'month': month,
+      'account': account,
       'note': note,
       'created_at': createdAt,
     };
@@ -28,6 +32,7 @@ class IncomeEntry {
       id: map['id'] as int?,
       amount: (map['amount'] as num).toDouble(),
       month: map['month'] as String,
+      account: map['account'] as String? ?? '',
       note: map['note'] as String? ?? '',
       createdAt: map['created_at'] as String?,
     );

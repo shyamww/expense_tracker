@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/income_provider.dart';
+import '../providers/account_provider.dart';
 import '../db/database_helper.dart';
 import '../models/income_entry.dart';
 import '../widgets/income_history_tile.dart';
 import '../widgets/income_action_sheet.dart';
+import '../widgets/account_chip.dart';
 
 class IncomeScreen extends StatefulWidget {
   const IncomeScreen({super.key});
@@ -23,13 +25,23 @@ class _IncomeScreenState extends State<IncomeScreen> {
   double _carryForward = 0;
   List<IncomeEntry> _history = [];
   int? _selectedIncomeEntryId;
+  String? _selectedAccount;
 
   @override
   void initState() {
     super.initState();
     _selectedDate = DateTime.now();
     _currentMonth = DateFormat('yyyy-MM').format(DateTime.now());
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadData();
+      if (!mounted) return;
+      final ap = context.read<AccountProvider>();
+      await ap.refresh();
+      if (!mounted) return;
+      if (_selectedAccount == null && ap.accounts.isNotEmpty) {
+        setState(() => _selectedAccount = ap.accounts.first.name);
+      }
+    });
   }
 
   Future<void> _loadData() async {
@@ -38,6 +50,8 @@ class _IncomeScreenState extends State<IncomeScreen> {
     await provider.loadIncomeForMonth(_currentMonth);
     final history = await DatabaseHelper().getIncomeHistoryForMonth(_currentMonth);
     final carry = await DatabaseHelper().getCarryForwardForMonth(_currentMonth);
+    if (!mounted) return;
+    await context.read<AccountProvider>().refresh();
     if (mounted) {
       setState(() {
         _currentTotal = provider.monthlyIncome;
@@ -68,6 +82,31 @@ class _IncomeScreenState extends State<IncomeScreen> {
     }
   }
 
+  bool get _canGoIncomeHistoryPrev {
+    final cur = DateTime.tryParse('$_currentMonth-01');
+    if (cur == null) return false;
+    final prev = DateTime(cur.year, cur.month - 1);
+    return !prev.isBefore(DateTime(2020, 1));
+  }
+
+  bool get _canGoIncomeHistoryNext {
+    final cur = DateTime.tryParse('$_currentMonth-01');
+    if (cur == null) return false;
+    final latest = DateTime(DateTime.now().year, DateTime.now().month);
+    return cur.isBefore(latest);
+  }
+
+  Future<void> _changeIncomeHistoryMonth(int delta) async {
+    final cur = DateTime.tryParse('$_currentMonth-01');
+    if (cur == null) return;
+    final next = DateTime(cur.year, cur.month + delta);
+    final latest = DateTime(DateTime.now().year, DateTime.now().month);
+    if (next.isAfter(latest)) return;
+    if (next.isBefore(DateTime(2020, 1))) return;
+    setState(() => _currentMonth = DateFormat('yyyy-MM').format(next));
+    await _loadData();
+  }
+
   Future<void> _save() async {
     final amountText = _amountController.text.trim();
     if (amountText.isEmpty) {
@@ -81,6 +120,11 @@ class _IncomeScreenState extends State<IncomeScreen> {
       return;
     }
 
+    if (_selectedAccount == null || _selectedAccount!.isEmpty) {
+      _showError('Please select an account');
+      return;
+    }
+
     final note = _noteController.text.trim();
     final month = DateFormat('yyyy-MM').format(_selectedDate);
     await context.read<IncomeProvider>().setIncome(
@@ -88,11 +132,13 @@ class _IncomeScreenState extends State<IncomeScreen> {
       month,
       note: note,
       date: _selectedDate,
+      account: _selectedAccount!,
     );
 
     _amountController.clear();
     _noteController.clear();
     setState(() {
+      _currentMonth = month;
       _selectedDate = DateTime.now();
     });
     await _loadData();
@@ -134,6 +180,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
 
   Future<void> _showEditIncomeEntry(IncomeEntry entry) async {
     if (entry.id == null) return;
+    final messenger = ScaffoldMessenger.of(context);
     final amountCtrl = TextEditingController(
       text: (entry.amount % 1 == 0)
           ? entry.amount.toStringAsFixed(0)
@@ -141,6 +188,11 @@ class _IncomeScreenState extends State<IncomeScreen> {
     );
     final noteCtrl = TextEditingController(text: entry.note);
     var pickedDate = DateTime.tryParse(entry.createdAt) ?? DateTime.now();
+    var editAccount = entry.account.isNotEmpty
+        ? entry.account
+        : (context.read<AccountProvider>().accounts.isNotEmpty
+            ? context.read<AccountProvider>().accounts.first.name
+            : '');
 
     await showModalBottomSheet<void>(
       context: context,
@@ -153,91 +205,120 @@ class _IncomeScreenState extends State<IncomeScreen> {
           ),
           child: StatefulBuilder(
             builder: (context, setModalState) {
-              return SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Edit income',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: amountCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(
-                        labelText: 'Amount',
-                        prefixText: '₹ ',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
+              return Consumer<AccountProvider>(
+                builder: (context, ap, _) {
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Edit income',
+                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: noteCtrl,
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: InputDecoration(
-                        labelText: 'Note',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.calendar_today, color: Colors.grey.shade700),
-                      title: Text(DateFormat('dd MMMM yyyy').format(pickedDate)),
-                      trailing: const Icon(Icons.edit_calendar),
-                      onTap: () async {
-                        final d = await showDatePicker(
-                          context: context,
-                          initialDate: pickedDate,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime.now(),
-                        );
-                        if (d != null) setModalState(() => pickedDate = d);
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: () async {
-                        final amount = double.tryParse(amountCtrl.text.trim());
-                        if (amount == null || amount <= 0) {
-                          _showError('Please enter a valid amount');
-                          return;
-                        }
-                        final month = DateFormat('yyyy-MM').format(pickedDate);
-                        final updated = IncomeEntry(
-                          id: entry.id,
-                          amount: amount,
-                          month: month,
-                          note: noteCtrl.text.trim(),
-                          createdAt: pickedDate.toIso8601String(),
-                        );
-                        await DatabaseHelper().updateIncomeHistoryEntry(updated);
-                        if (sheetContext.mounted) Navigator.pop(sheetContext);
-                        if (!mounted) return;
-                        await context.read<IncomeProvider>().loadIncomeForMonth(_currentMonth);
-                        await _loadData();
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Income updated'),
-                              behavior: SnackBarBehavior.floating,
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: amountCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(
+                            labelText: 'Amount',
+                            prefixText: '₹ ',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
                             ),
-                          );
-                        }
-                      },
-                      child: const Text('Save changes'),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: noteCtrl,
+                          textCapitalization: TextCapitalization.sentences,
+                          decoration: InputDecoration(
+                            labelText: 'Note',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        if (ap.accounts.isNotEmpty) ...[
+                          Text(
+                            'Account',
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: ap.accounts.map((a) {
+                              return AccountChip(
+                                name: a.name,
+                                selected: editAccount == a.name,
+                                onTap: () => setModalState(() => editAccount = a.name),
+                              );
+                            }).toList(),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(Icons.calendar_today, color: Colors.grey.shade700),
+                          title: Text(DateFormat('dd MMMM yyyy').format(pickedDate)),
+                          trailing: const Icon(Icons.edit_calendar),
+                          onTap: () async {
+                            final d = await showDatePicker(
+                              context: context,
+                              initialDate: pickedDate,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime.now(),
+                            );
+                            if (d != null) setModalState(() => pickedDate = d);
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton(
+                          onPressed: () async {
+                            final amount = double.tryParse(amountCtrl.text.trim());
+                            if (amount == null || amount <= 0) {
+                              _showError('Please enter a valid amount');
+                              return;
+                            }
+                            if (editAccount.isEmpty) {
+                              _showError('Please select an account');
+                              return;
+                            }
+                            final month = DateFormat('yyyy-MM').format(pickedDate);
+                            final updated = IncomeEntry(
+                              id: entry.id,
+                              amount: amount,
+                              month: month,
+                              account: editAccount,
+                              note: noteCtrl.text.trim(),
+                              createdAt: pickedDate.toIso8601String(),
+                            );
+                            await DatabaseHelper().updateIncomeHistoryEntry(updated);
+                            if (sheetContext.mounted) Navigator.pop(sheetContext);
+                            if (!mounted) return;
+                            setState(() => _currentMonth = month);
+                            await _loadData();
+                            if (!mounted) return;
+                            messenger.showSnackBar(
+                              const SnackBar(
+                                content: Text('Income updated'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          },
+                          child: const Text('Save changes'),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  );
+                },
               );
             },
           ),
@@ -251,7 +332,9 @@ class _IncomeScreenState extends State<IncomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final displayMonth = DateFormat('MMMM yyyy').format(DateTime.now());
+    final monthAnchor =
+        DateTime.tryParse('$_currentMonth-01') ?? DateTime.now();
+    final displayMonth = DateFormat('MMMM yyyy').format(monthAnchor);
 
     return Scaffold(
       appBar: AppBar(
@@ -375,6 +458,38 @@ class _IncomeScreenState extends State<IncomeScreen> {
                           const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     ),
                   ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Account',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  Consumer<AccountProvider>(
+                    builder: (context, ap, _) {
+                      if (ap.accounts.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            'Add an account in Settings → Accounts.',
+                            style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                          ),
+                        );
+                      }
+                      return Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: ap.accounts.map((a) {
+                          return AccountChip(
+                            name: a.name,
+                            selected: _selectedAccount == a.name,
+                            onTap: () => setState(() => _selectedAccount = a.name),
+                          );
+                        }).toList(),
+                      );
+                    },
+                  ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _noteController,
@@ -429,6 +544,67 @@ class _IncomeScreenState extends State<IncomeScreen> {
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          onPressed: _canGoIncomeHistoryPrev
+                              ? () => _changeIncomeHistoryMonth(-1)
+                              : null,
+                          icon: Icon(
+                            Icons.chevron_left_rounded,
+                            size: 22,
+                            color: _canGoIncomeHistoryPrev
+                                ? Colors.grey.shade700
+                                : Colors.grey.shade300,
+                          ),
+                          tooltip: 'Earlier month',
+                          visualDensity: VisualDensity.compact,
+                          style: IconButton.styleFrom(
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            minimumSize: const Size(32, 32),
+                            padding: EdgeInsets.zero,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            DateFormat('MMM yyyy').format(
+                              DateTime.tryParse('$_currentMonth-01') ??
+                                  DateTime.now(),
+                            ),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey.shade700,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: _canGoIncomeHistoryNext
+                              ? () => _changeIncomeHistoryMonth(1)
+                              : null,
+                          icon: Icon(
+                            Icons.chevron_right_rounded,
+                            size: 22,
+                            color: _canGoIncomeHistoryNext
+                                ? Colors.grey.shade700
+                                : Colors.grey.shade300,
+                          ),
+                          tooltip: 'Later month',
+                          visualDensity: VisualDensity.compact,
+                          style: IconButton.styleFrom(
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            minimumSize: const Size(32, 32),
+                            padding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],

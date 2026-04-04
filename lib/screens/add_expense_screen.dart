@@ -4,12 +4,17 @@ import 'package:intl/intl.dart';
 import '../models/expense.dart';
 import '../providers/expense_provider.dart';
 import '../providers/category_provider.dart';
+import '../providers/account_provider.dart';
 import '../widgets/category_chip.dart';
+import '../widgets/account_chip.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   final Expense? expenseToEdit;
 
-  const AddExpenseScreen({super.key, this.expenseToEdit});
+  /// When set, the expense stays on this account (no account picker). Used when editing from an account ledger.
+  final String? lockAccountTo;
+
+  const AddExpenseScreen({super.key, this.expenseToEdit, this.lockAccountTo});
 
   @override
   State<AddExpenseScreen> createState() => _AddExpenseScreenState();
@@ -19,9 +24,15 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   final _amountController = TextEditingController();
   final _noteController = TextEditingController();
   String? _selectedCategory;
+  String? _selectedAccount;
   late DateTime _selectedDateTime;
 
   bool get _isEditing => widget.expenseToEdit != null;
+
+  bool get _accountLocked {
+    final a = widget.lockAccountTo?.trim();
+    return a != null && a.isNotEmpty;
+  }
 
   @override
   void initState() {
@@ -33,6 +44,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           : e.amount.toString();
       _noteController.text = e.note;
       _selectedCategory = e.category;
+      if (_accountLocked) {
+        _selectedAccount = widget.lockAccountTo!.trim();
+      } else {
+        _selectedAccount = e.account.isNotEmpty ? e.account : null;
+      }
       final fromCreated = DateTime.tryParse(e.createdAt);
       if (fromCreated != null &&
           DateFormat('yyyy-MM-dd').format(fromCreated) == e.date) {
@@ -46,10 +62,17 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     } else {
       _selectedDateTime = DateTime.now();
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final cp = context.read<CategoryProvider>();
-      if (cp.categories.isEmpty) cp.loadCategories();
+      if (cp.categories.isEmpty) await cp.loadCategories();
+      if (!mounted) return;
+      final ap = context.read<AccountProvider>();
+      await ap.refresh();
+      if (!mounted) return;
+      if (!_accountLocked && _selectedAccount == null && ap.accounts.isNotEmpty) {
+        setState(() => _selectedAccount = ap.accounts.first.name);
+      }
     });
   }
 
@@ -116,6 +139,14 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       return;
     }
 
+    final accountName = _accountLocked
+        ? widget.lockAccountTo!.trim()
+        : _selectedAccount;
+    if (accountName == null || accountName.isEmpty) {
+      _showError('Please select an account');
+      return;
+    }
+
     var when = _selectedDateTime;
     final now = DateTime.now();
     if (when.isAfter(now)) when = now;
@@ -124,19 +155,24 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       id: widget.expenseToEdit?.id,
       amount: amount,
       category: _selectedCategory!,
+      account: accountName,
       note: _noteController.text.trim(),
       date: DateFormat('yyyy-MM-dd').format(when),
       createdAt: when.toIso8601String(),
     );
 
     final provider = context.read<ExpenseProvider>();
+    final accountProvider = context.read<AccountProvider>();
     if (_isEditing) {
       await provider.updateExpense(expense);
     } else {
       await provider.addExpense(expense);
     }
 
-    if (mounted) Navigator.pop(context);
+    if (!mounted) return;
+    await accountProvider.refresh();
+    if (!mounted) return;
+    Navigator.pop(context);
   }
 
   void _showError(String message) {
@@ -228,6 +264,58 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
             ),
 
             const SizedBox(height: 24),
+
+            if (_accountLocked) ...[
+              Text(
+                'Account',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                widget.lockAccountTo!.trim(),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade800,
+                ),
+              ),
+              const SizedBox(height: 24),
+            ] else ...[
+              Text(
+                'Account',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const SizedBox(height: 10),
+              Consumer<AccountProvider>(
+                builder: (context, ap, _) {
+                  if (ap.accounts.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        'Add an account in Settings → Accounts.',
+                        style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                      ),
+                    );
+                  }
+                  return Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: ap.accounts.map((a) {
+                      return AccountChip(
+                        name: a.name,
+                        selected: _selectedAccount == a.name,
+                        onTap: () => setState(() => _selectedAccount = a.name),
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+              const SizedBox(height: 24),
+            ],
 
             // Date & time
             Text(

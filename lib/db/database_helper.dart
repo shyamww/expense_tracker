@@ -6,7 +6,10 @@ import '../models/expense.dart';
 import '../models/income.dart';
 import '../models/income_entry.dart';
 import '../models/expense_category.dart';
+import '../models/app_account.dart';
+import '../models/account_ledger_day.dart';
 import '../data/category_seed_data.dart';
+import '../data/account_seed_data.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -18,10 +21,12 @@ class DatabaseHelper {
   final List<Map<String, dynamic>> _webIncome = [];
   final List<Map<String, dynamic>> _webIncomeHistory = [];
   final List<Map<String, dynamic>> _webExpenseCategories = [];
+  final List<Map<String, dynamic>> _webAccounts = [];
   int _nextExpenseId = 1;
   int _nextIncomeId = 1;
   int _nextIncomeHistoryId = 1;
   int _nextCategoryId = 1;
+  int _nextAccountId = 1;
 
   // ── Mobile SQLite ──
   Database? _database;
@@ -32,7 +37,7 @@ class DatabaseHelper {
     final path = p.join(dbPath, 'expense_tracker.db');
     _database = await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -45,6 +50,7 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         amount REAL NOT NULL,
         category TEXT NOT NULL,
+        account TEXT NOT NULL DEFAULT '',
         note TEXT DEFAULT '',
         date TEXT NOT NULL,
         created_at TEXT NOT NULL
@@ -62,6 +68,7 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         amount REAL NOT NULL,
         month TEXT NOT NULL,
+        account TEXT NOT NULL DEFAULT '',
         note TEXT DEFAULT '',
         created_at TEXT NOT NULL
       )
@@ -77,6 +84,14 @@ class DatabaseHelper {
       )
     ''');
     await _insertSeedExpenseCategories(db);
+    await db.execute('''
+      CREATE TABLE accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+    await _insertSeedAccounts(db);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -104,6 +119,40 @@ class DatabaseHelper {
       ''');
       await _insertSeedExpenseCategories(db);
       await _ensureExpenseCategoryRowsForOrphans(db);
+    }
+    if (oldVersion < 4) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS accounts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          sort_order INTEGER NOT NULL DEFAULT 0
+        )
+      ''');
+      await _insertSeedAccounts(db);
+      try {
+        await db.execute(
+          "ALTER TABLE expenses ADD COLUMN account TEXT NOT NULL DEFAULT ''",
+        );
+      } catch (_) {
+        // Column may already exist on repeated runs
+      }
+      try {
+        await db.execute(
+          "ALTER TABLE income_history ADD COLUMN account TEXT NOT NULL DEFAULT ''",
+        );
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _insertSeedAccounts(DatabaseExecutor db) async {
+    for (final a in buildSeededAccounts()) {
+      await db.rawInsert(
+        '''
+        INSERT OR IGNORE INTO accounts (name, sort_order)
+        VALUES (?, ?)
+        ''',
+        [a.name, a.sortOrder],
+      );
     }
   }
 
@@ -283,6 +332,213 @@ class DatabaseHelper {
     await db.delete('expense_categories', where: 'id = ?', whereArgs: [id]);
   }
 
+  // ── Accounts (banks / cash) ──
+
+  Future<List<AppAccount>> getAccounts() async {
+    if (kIsWeb) {
+      if (_webAccounts.isEmpty) {
+        for (final a in buildSeededAccounts()) {
+          _webAccounts.add({
+            'id': _nextAccountId++,
+            'name': a.name,
+            'sort_order': a.sortOrder,
+          });
+        }
+      }
+      final sorted = List<Map<String, dynamic>>.from(_webAccounts)
+        ..sort((a, b) => ((a['sort_order'] as num?)?.toInt() ?? 0)
+            .compareTo((b['sort_order'] as num?)?.toInt() ?? 0));
+      return sorted.map((m) => AppAccount.fromMap(m)).toList();
+    }
+    final db = await _getDb();
+    final maps = await db.query('accounts', orderBy: 'sort_order ASC, name ASC');
+    return maps.map((m) => AppAccount.fromMap(m)).toList();
+  }
+
+  Future<int> insertAccount(AppAccount a) async {
+    final row = {
+      'name': a.name.trim(),
+      'sort_order': a.sortOrder,
+    };
+    if (kIsWeb) {
+      if (_webAccounts.any((m) => (m['name'] as String) == row['name'])) {
+        throw StateError('duplicate_name');
+      }
+      final map = Map<String, dynamic>.from(row);
+      map['id'] = _nextAccountId++;
+      _webAccounts.add(map);
+      return map['id'] as int;
+    }
+    final db = await _getDb();
+    return await db.insert('accounts', row);
+  }
+
+  Future<void> updateAccount(AppAccount a, {required String previousName}) async {
+    if (a.id == null) return;
+    final row = {
+      'name': a.name.trim(),
+      'sort_order': a.sortOrder,
+    };
+    if (kIsWeb) {
+      final idx = _webAccounts.indexWhere((m) => m['id'] == a.id);
+      if (idx == -1) return;
+      final trimmed = a.name.trim();
+      final dup = _webAccounts.any(
+        (m) => m['id'] != a.id && (m['name'] as String) == trimmed,
+      );
+      if (dup) throw StateError('duplicate_name');
+      _webAccounts[idx] = {...row, 'id': a.id};
+      if (previousName != trimmed) {
+        for (final e in _webExpenses) {
+          if (e['account'] == previousName) e['account'] = trimmed;
+        }
+        for (final h in _webIncomeHistory) {
+          if (h['account'] == previousName) h['account'] = trimmed;
+        }
+      }
+      return;
+    }
+    final db = await _getDb();
+    await db.transaction((txn) async {
+      if (previousName != a.name.trim()) {
+        await txn.update(
+          'expenses',
+          {'account': a.name.trim()},
+          where: 'account = ?',
+          whereArgs: [previousName],
+        );
+        await txn.update(
+          'income_history',
+          {'account': a.name.trim()},
+          where: 'account = ?',
+          whereArgs: [previousName],
+        );
+      }
+      await txn.update(
+        'accounts',
+        row,
+        where: 'id = ?',
+        whereArgs: [a.id],
+      );
+    });
+  }
+
+  Future<int> countExpensesWithAccount(String accountName) async {
+    if (kIsWeb) {
+      return _webExpenses.where((m) => m['account'] == accountName).length;
+    }
+    final db = await _getDb();
+    final r = await db.rawQuery(
+      'SELECT COUNT(*) as n FROM expenses WHERE account = ?',
+      [accountName],
+    );
+    final raw = r.first['n'];
+    if (raw is int) return raw;
+    if (raw is num) return raw.toInt();
+    return 0;
+  }
+
+  Future<int> countIncomeHistoryWithAccount(String accountName) async {
+    if (kIsWeb) {
+      return _webIncomeHistory.where((m) => m['account'] == accountName).length;
+    }
+    final db = await _getDb();
+    final r = await db.rawQuery(
+      'SELECT COUNT(*) as n FROM income_history WHERE account = ?',
+      [accountName],
+    );
+    final raw = r.first['n'];
+    if (raw is int) return raw;
+    if (raw is num) return raw.toInt();
+    return 0;
+  }
+
+  Future<void> reassignExpensesAccount({
+    required String fromName,
+    required String toName,
+  }) async {
+    if (kIsWeb) {
+      for (final e in _webExpenses) {
+        if (e['account'] == fromName) e['account'] = toName;
+      }
+      return;
+    }
+    final db = await _getDb();
+    await db.update(
+      'expenses',
+      {'account': toName},
+      where: 'account = ?',
+      whereArgs: [fromName],
+    );
+  }
+
+  Future<void> reassignIncomeHistoryAccount({
+    required String fromName,
+    required String toName,
+  }) async {
+    if (kIsWeb) {
+      for (final h in _webIncomeHistory) {
+        if (h['account'] == fromName) h['account'] = toName;
+      }
+      return;
+    }
+    final db = await _getDb();
+    await db.update(
+      'income_history',
+      {'account': toName},
+      where: 'account = ?',
+      whereArgs: [fromName],
+    );
+  }
+
+  Future<void> deleteAccountById(int id) async {
+    if (kIsWeb) {
+      _webAccounts.removeWhere((m) => m['id'] == id);
+      return;
+    }
+    final db = await _getDb();
+    await db.delete('accounts', where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Sum of all account balances: income credits and "Received" expenses credit;
+  /// other expenses debit. Only rows with a non-empty [Expense.account] / [IncomeEntry.account] count.
+  Future<double> getCumulativeAccountBalance() async {
+    if (kIsWeb) {
+      var total = 0.0;
+      for (final e in _webExpenses) {
+        final acct = e['account'] as String? ?? '';
+        if (acct.isEmpty) continue;
+        final amt = (e['amount'] as num).toDouble();
+        final cat = e['category'] as String? ?? '';
+        if (cat == 'Received') {
+          total += amt;
+        } else {
+          total -= amt;
+        }
+      }
+      for (final h in _webIncomeHistory) {
+        final acct = h['account'] as String? ?? '';
+        if (acct.isEmpty) continue;
+        total += (h['amount'] as num).toDouble();
+      }
+      return total;
+    }
+    final db = await _getDb();
+    final exp = await db.rawQuery('''
+      SELECT COALESCE(SUM(CASE WHEN category = 'Received' THEN amount ELSE -amount END), 0) AS t
+      FROM expenses
+      WHERE IFNULL(account, '') != ''
+    ''');
+    final inc = await db.rawQuery('''
+      SELECT COALESCE(SUM(amount), 0) AS t
+      FROM income_history
+      WHERE IFNULL(account, '') != ''
+    ''');
+    final expTotal = (exp.first['t'] as num).toDouble();
+    final incTotal = (inc.first['t'] as num).toDouble();
+    return expTotal + incTotal;
+  }
+
   // ── Expense CRUD ──
 
   Future<int> insertExpense(Expense expense) async {
@@ -376,10 +632,16 @@ class DatabaseHelper {
 
   // ── Income CRUD ──
 
-  Future<int> upsertIncome(Income income, {String note = '', DateTime? date}) async {
+  Future<int> upsertIncome(
+    Income income, {
+    String note = '',
+    DateTime? date,
+    String account = '',
+  }) async {
     final entry = IncomeEntry(
       amount: income.amount,
       month: income.month,
+      account: account,
       note: note,
       createdAt: date?.toIso8601String(),
     );
@@ -439,6 +701,17 @@ class DatabaseHelper {
       whereArgs: [month],
       orderBy: 'created_at DESC',
     );
+    return maps.map((m) => IncomeEntry.fromMap(m)).toList();
+  }
+
+  Future<List<IncomeEntry>> getAllIncomeHistory() async {
+    if (kIsWeb) {
+      final sorted = List<Map<String, dynamic>>.from(_webIncomeHistory)
+        ..sort((a, b) => (b['created_at'] as String).compareTo(a['created_at'] as String));
+      return sorted.map((m) => IncomeEntry.fromMap(m)).toList();
+    }
+    final db = await _getDb();
+    final maps = await db.query('income_history', orderBy: 'created_at DESC');
     return maps.map((m) => IncomeEntry.fromMap(m)).toList();
   }
 
@@ -504,6 +777,7 @@ class DatabaseHelper {
         'id': entry.id,
         'amount': entry.amount,
         'month': entry.month,
+        'account': entry.account,
         'note': entry.note,
         'created_at': entry.createdAt,
       };
@@ -519,6 +793,7 @@ class DatabaseHelper {
       {
         'amount': entry.amount,
         'month': entry.month,
+        'account': entry.account,
         'note': entry.note,
         'created_at': entry.createdAt,
       },
@@ -607,6 +882,132 @@ class DatabaseHelper {
     return totalIncome + totalReceived - totalSpent;
   }
 
+  /// Net balance brought into [month] for [account] (income_history with month \< M
+  /// plus expenses on this account with date \< first day of [month]).
+  Future<double> getAccountCarryForwardForMonth(String account, String month) async {
+    if (account.isEmpty) return 0;
+    final firstDay = '$month-01';
+    double fromIncomeHistory = 0;
+    double fromExpenses = 0;
+
+    if (kIsWeb) {
+      for (final h in _webIncomeHistory) {
+        if ((h['account'] as String? ?? '') != account) continue;
+        if ((h['month'] as String).compareTo(month) < 0) {
+          fromIncomeHistory += (h['amount'] as num).toDouble();
+        }
+      }
+      for (final e in _webExpenses) {
+        if ((e['account'] as String? ?? '') != account) continue;
+        if ((e['date'] as String).compareTo(firstDay) >= 0) continue;
+        final amt = (e['amount'] as num).toDouble();
+        if (e['category'] == 'Received') {
+          fromExpenses += amt;
+        } else {
+          fromExpenses -= amt;
+        }
+      }
+    } else {
+      final db = await _getDb();
+      final inc = await db.rawQuery(
+        'SELECT COALESCE(SUM(amount), 0) AS t FROM income_history WHERE account = ? AND month < ?',
+        [account, month],
+      );
+      fromIncomeHistory = (inc.first['t'] as num).toDouble();
+      final exp = await db.rawQuery(
+        '''
+        SELECT COALESCE(SUM(CASE WHEN category = 'Received' THEN amount ELSE -amount END), 0) AS t
+        FROM expenses WHERE account = ? AND date < ?
+        ''',
+        [account, firstDay],
+      );
+      fromExpenses = (exp.first['t'] as num).toDouble();
+    }
+
+    return fromIncomeHistory + fromExpenses;
+  }
+
+  String _incomeEntryDateKey(IncomeEntry e) {
+    final dt = DateTime.tryParse(e.createdAt);
+    if (dt != null) {
+      final y = dt.year.toString().padLeft(4, '0');
+      final m = dt.month.toString().padLeft(2, '0');
+      final d = dt.day.toString().padLeft(2, '0');
+      return '$y-$m-$d';
+    }
+    return '${e.month}-01';
+  }
+
+  /// Calendar day for grouping income in the month ledger (stays inside [e.month]).
+  String _incomeLedgerBucketDate(IncomeEntry e) {
+    final dk = _incomeEntryDateKey(e);
+    if (dk.startsWith(e.month)) return dk;
+    return '${e.month}-01';
+  }
+
+  /// Expenses and income on [account] in [month] (yyyy-MM), grouped by day (newest first).
+  Future<AccountMonthLedger> getAccountMonthLedger(String account, String month) async {
+    if (account.isEmpty) {
+      return const AccountMonthLedger(
+        carryForward: 0,
+        monthIncome: 0,
+        monthSpent: 0,
+        days: [],
+      );
+    }
+
+    final carryForward = await getAccountCarryForwardForMonth(account, month);
+    final monthExpenses = (await getExpensesByMonth(month))
+        .where((e) => e.account == account)
+        .toList();
+    final monthIncomeRows = (await getIncomeHistoryForMonth(month))
+        .where((e) => e.account == account)
+        .toList();
+
+    var monthSpent = 0.0;
+    var monthIncome = 0.0;
+    for (final e in monthExpenses) {
+      if (e.category == 'Received') {
+        monthIncome += e.amount;
+      } else {
+        monthSpent += e.amount;
+      }
+    }
+    for (final h in monthIncomeRows) {
+      monthIncome += h.amount;
+    }
+
+    final byDay = <String, ({List<Expense> ex, List<IncomeEntry> inc})>{};
+    void ensure(String d) {
+      byDay.putIfAbsent(d, () => (ex: <Expense>[], inc: <IncomeEntry>[]));
+    }
+
+    for (final e in monthExpenses) {
+      ensure(e.date);
+      byDay[e.date]!.ex.add(e);
+    }
+    for (final h in monthIncomeRows) {
+      final d = _incomeLedgerBucketDate(h);
+      ensure(d);
+      byDay[d]!.inc.add(h);
+    }
+
+    final keys = byDay.keys.toList()..sort((a, b) => b.compareTo(a));
+    final days = keys.map((k) {
+      final bucket = byDay[k]!;
+      bucket.ex.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      bucket.inc.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return AccountLedgerDay(date: k, expenses: bucket.ex, incomeEntries: bucket.inc);
+    }).toList();
+
+    return AccountMonthLedger(
+      carryForward: carryForward,
+      monthIncome: monthIncome,
+      monthSpent: monthSpent,
+      days: days,
+    );
+  }
+
   // ── Year queries ──
 
   Future<List<Income>> getIncomeForYear(int year) async {
@@ -650,15 +1051,30 @@ class DatabaseHelper {
     return await db.query('income_history');
   }
 
+  Future<List<Map<String, dynamic>>> _getAllAccounts() async {
+    if (kIsWeb) {
+      return List<Map<String, dynamic>>.from(_webAccounts);
+    }
+    final db = await _getDb();
+    return await db.query('accounts', orderBy: 'sort_order ASC, name ASC');
+  }
+
   Future<String> exportToJson() async {
     final expenses = await getAllExpenses();
     final incomeList = await _getAllIncome();
     final historyList = await _getAllIncomeHistory();
     final categoryRows = await getExpenseCategories();
+    final accountRows = await _getAllAccounts();
 
     final data = {
-      'version': 3,
+      'version': 4,
       'exported_at': DateTime.now().toIso8601String(),
+      'accounts': accountRows
+          .map((m) => {
+                'name': m['name'],
+                'sort_order': m['sort_order'] ?? 0,
+              })
+          .toList(),
       'expense_categories': categoryRows
           .map((c) => {
                 'name': c.name,
@@ -671,6 +1087,7 @@ class DatabaseHelper {
       'expenses': expenses.map((e) => {
         'amount': e.amount,
         'category': e.category,
+        'account': e.account,
         'note': e.note,
         'date': e.date,
         'created_at': e.createdAt,
@@ -682,6 +1099,7 @@ class DatabaseHelper {
       'income_history': historyList.map((m) => {
         'amount': m['amount'],
         'month': m['month'],
+        'account': m['account'] ?? '',
         'note': m['note'] ?? '',
         'created_at': m['created_at'],
       }).toList(),
@@ -696,16 +1114,32 @@ class DatabaseHelper {
     final incomeList = data['income'] as List<dynamic>? ?? [];
     final historyList = data['income_history'] as List<dynamic>? ?? [];
     final catList = data['expense_categories'] as List<dynamic>?;
+    final accList = data['accounts'] as List<dynamic>?;
 
     if (kIsWeb) {
       _webExpenses.clear();
       _webIncome.clear();
       _webIncomeHistory.clear();
       _webExpenseCategories.clear();
+      _webAccounts.clear();
       _nextExpenseId = 1;
       _nextIncomeId = 1;
       _nextIncomeHistoryId = 1;
       _nextCategoryId = 1;
+      _nextAccountId = 1;
+
+      if (accList != null && accList.isNotEmpty) {
+        for (final raw in accList) {
+          final m = Map<String, dynamic>.from(raw as Map);
+          _webAccounts.add({
+            'id': _nextAccountId++,
+            'name': m['name'] as String,
+            'sort_order': (m['sort_order'] as num?)?.toInt() ?? 0,
+          });
+        }
+      } else {
+        await _insertSeedAccountsWeb();
+      }
 
       for (final e in expensesList) {
         final map = Map<String, dynamic>.from(e as Map);
@@ -713,6 +1147,7 @@ class DatabaseHelper {
         if (map['created_at'] == null) {
           map['created_at'] = DateTime.now().toIso8601String();
         }
+        map['account'] = map['account'] as String? ?? '';
         _webExpenses.add(map);
       }
       for (final i in incomeList) {
@@ -726,6 +1161,7 @@ class DatabaseHelper {
         if (map['created_at'] == null) {
           map['created_at'] = DateTime.now().toIso8601String();
         }
+        map['account'] = map['account'] as String? ?? '';
         _webIncomeHistory.add(map);
       }
       if (catList != null && catList.isNotEmpty) {
@@ -753,12 +1189,26 @@ class DatabaseHelper {
       await txn.delete('income');
       await txn.delete('income_history');
       await txn.delete('expense_categories');
+      await txn.delete('accounts');
+
+      if (accList != null && accList.isNotEmpty) {
+        for (final raw in accList) {
+          final m = Map<String, dynamic>.from(raw as Map);
+          await txn.insert('accounts', {
+            'name': m['name'] as String,
+            'sort_order': (m['sort_order'] as num?)?.toInt() ?? 0,
+          });
+        }
+      } else {
+        await _insertSeedAccounts(txn);
+      }
 
       for (final e in expensesList) {
         final map = Map<String, dynamic>.from(e as Map);
         if (map['created_at'] == null) {
           map['created_at'] = DateTime.now().toIso8601String();
         }
+        map['account'] = map['account'] as String? ?? '';
         map.remove('id');
         await txn.insert('expenses', map);
       }
@@ -789,10 +1239,21 @@ class DatabaseHelper {
         if (map['created_at'] == null) {
           map['created_at'] = DateTime.now().toIso8601String();
         }
+        map['account'] = map['account'] as String? ?? '';
         map.remove('id');
         await txn.insert('income_history', map);
       }
     });
+  }
+
+  Future<void> _insertSeedAccountsWeb() async {
+    for (final a in buildSeededAccounts()) {
+      _webAccounts.add({
+        'id': _nextAccountId++,
+        'name': a.name,
+        'sort_order': a.sortOrder,
+      });
+    }
   }
 
   Future<void> _insertSeedExpenseCategoriesWeb() async {

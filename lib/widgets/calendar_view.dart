@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/expense.dart';
+import '../models/income_entry.dart';
 import '../screens/day_detail_screen.dart';
 
 /// First month users can open (page 0).
@@ -21,12 +22,14 @@ int _maxPageIndex() {
 class CalendarView extends StatefulWidget {
   final DateTime selectedMonth;
   final List<Expense> expenses;
+  final List<IncomeEntry> incomeHistory;
   final ValueChanged<DateTime> onMonthSelected;
 
   const CalendarView({
     super.key,
     required this.selectedMonth,
     required this.expenses,
+    required this.incomeHistory,
     required this.onMonthSelected,
   });
 
@@ -130,9 +133,13 @@ class _CalendarViewState extends State<CalendarView> {
   Widget _buildMonthGrid(BuildContext context, DateTime month) {
     final monthPrefix = DateFormat('yyyy-MM').format(month);
     final dailyTotals = _computeDailyTotals(monthPrefix);
-    final datesWithExpense = <String>{};
+    final datesWithActivity = <String>{};
     for (final e in widget.expenses) {
-      if (e.date.startsWith(monthPrefix)) datesWithExpense.add(e.date);
+      if (e.date.startsWith(monthPrefix)) datesWithActivity.add(e.date);
+    }
+    for (final inc in widget.incomeHistory) {
+      final dk = _incomeEntryDateKey(inc);
+      if (dk.startsWith(monthPrefix)) datesWithActivity.add(dk);
     }
 
     final firstDay = DateTime(month.year, month.month, 1);
@@ -165,7 +172,7 @@ class _CalendarViewState extends State<CalendarView> {
                     daysInMonth,
                     dailyTotals,
                     month,
-                    datesWithExpense,
+                    datesWithActivity,
                   ),
                 ),
             ],
@@ -186,7 +193,19 @@ class _CalendarViewState extends State<CalendarView> {
         totals[e.date] = (spent: current.spent + e.amount, received: current.received);
       }
     }
+    for (final inc in widget.incomeHistory) {
+      final dk = _incomeEntryDateKey(inc);
+      if (!dk.startsWith(monthPrefix)) continue;
+      final current = totals[dk] ?? (spent: 0.0, received: 0.0);
+      totals[dk] = (spent: current.spent, received: current.received + inc.amount);
+    }
     return totals;
+  }
+
+  String _incomeEntryDateKey(IncomeEntry e) {
+    final dt = DateTime.tryParse(e.createdAt);
+    if (dt != null) return DateFormat('yyyy-MM-dd').format(dt);
+    return '${e.month}-01';
   }
 
   Widget _buildWeekRow(
@@ -196,7 +215,7 @@ class _CalendarViewState extends State<CalendarView> {
     int daysInMonth,
     Map<String, ({double spent, double received})> dailyTotals,
     DateTime month,
-    Set<String> datesWithExpense,
+    Set<String> datesWithActivity,
   ) {
     final today = DateTime.now();
     final todayStr = DateFormat('yyyy-MM-dd').format(today);
@@ -251,7 +270,7 @@ class _CalendarViewState extends State<CalendarView> {
               child: InkWell(
                 onTap: () {
                   setState(() => _selectedDateStr = dateStr);
-                  final hasEntry = datesWithExpense.contains(dateStr);
+                  final hasEntry = datesWithActivity.contains(dateStr);
                   if (!hasEntry) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(

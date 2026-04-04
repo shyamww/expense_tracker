@@ -5,11 +5,14 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/expense_provider.dart';
 import '../models/expense.dart';
+import '../models/income_entry.dart';
 import '../providers/income_provider.dart';
 import '../providers/category_provider.dart';
+import '../providers/account_provider.dart';
 import '../providers/app_navigation_hub.dart';
 import '../services/expense_reminder_service.dart';
 import '../widgets/expense_tile.dart';
+import '../widgets/income_history_tile.dart';
 import '../widgets/calendar_view.dart';
 import '../widgets/monthly_view.dart';
 import '../widgets/install_countdown_bar.dart';
@@ -17,8 +20,14 @@ import '../widgets/expense_action_sheet.dart';
 import 'add_expense_screen.dart';
 import 'income_screen.dart';
 import 'report_screen.dart';
-import 'backup_screen.dart';
+import 'accounts_list_screen.dart';
 import 'settings_screen.dart';
+
+String _incomeEntryCalendarDateKey(IncomeEntry e) {
+  final dt = DateTime.tryParse(e.createdAt);
+  if (dt != null) return DateFormat('yyyy-MM-dd').format(dt);
+  return '${e.month}-01';
+}
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -103,9 +112,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final expenseProvider = context.read<ExpenseProvider>();
     final incomeProvider = context.read<IncomeProvider>();
     final categoryProvider = context.read<CategoryProvider>();
+    final accountProvider = context.read<AccountProvider>();
     await expenseProvider.loadExpenses();
     await incomeProvider.loadIncomeForCurrentMonth();
     await categoryProvider.loadCategories();
+    await accountProvider.refresh();
   }
 
   bool get _isCurrentMonth {
@@ -156,13 +167,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   Widget build(BuildContext context) {
     final expenseProvider = context.watch<ExpenseProvider>();
     final incomeProvider = context.watch<IncomeProvider>();
+    final accountProvider = context.watch<AccountProvider>();
     final theme = Theme.of(context);
 
     final spent = expenseProvider.totalSpentForMonth(_monthPrefix);
     final received = expenseProvider.totalReceivedForMonth(_monthPrefix);
     final carryForward = incomeProvider.carryForward;
     final income = incomeProvider.monthlyIncome + received;
-    final total = carryForward + income - spent;
+    final accountsTotal = accountProvider.cumulativeBalance;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
@@ -193,7 +205,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             carryForward: carryForward,
             income: income,
             spent: spent,
-            total: total,
+            accountsTotal: accountsTotal,
           ),
 
           const SizedBox(height: 6),
@@ -235,11 +247,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               physics: const NeverScrollableScrollPhysics(),
               children: [
                 // Daily Tab
-                _buildDailyTab(expenseProvider),
+                _buildDailyTab(expenseProvider, incomeProvider),
                 // Calendar Tab
                 CalendarView(
                   selectedMonth: _selectedMonth,
                   expenses: expenseProvider.expenses,
+                  incomeHistory: incomeProvider.allIncomeHistory,
                   onMonthSelected: _selectMonth,
                 ),
                 // Monthly Tab
@@ -316,12 +329,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     },
                   ),
                   _buildBottomBarItem(
-                    icon: Icons.cloud_sync_outlined,
-                    label: 'Backup',
+                    icon: Icons.account_balance_outlined,
+                    label: 'Accounts',
                     onTap: () async {
                       await Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const BackupScreen()),
+                        MaterialPageRoute(builder: (_) => const AccountsListScreen()),
                       );
                       if (mounted) _loadData();
                     },
@@ -391,7 +404,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     required double carryForward,
     required double income,
     required double spent,
-    required double total,
+    required double accountsTotal,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -419,7 +432,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
           Expanded(
             child: _BalanceSummaryCard(
               carryForward: carryForward,
-              balance: total,
+              balance: accountsTotal,
             ),
           ),
         ],
@@ -456,10 +469,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-  Widget _buildDailyTab(ExpenseProvider expenseProvider) {
+  Widget _buildDailyTab(ExpenseProvider expenseProvider, IncomeProvider incomeProvider) {
     final grouped = expenseProvider.getExpensesGroupedByDay(_monthPrefix);
+    final incomeByDay = <String, List<IncomeEntry>>{};
+    for (final inc in incomeProvider.allIncomeHistory) {
+      final dk = _incomeEntryCalendarDateKey(inc);
+      if (!dk.startsWith(_monthPrefix)) continue;
+      incomeByDay.putIfAbsent(dk, () => []).add(inc);
+    }
+    for (final list in incomeByDay.values) {
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    }
 
-    if (grouped.isEmpty) {
+    final allDates = {...grouped.keys, ...incomeByDay.keys};
+    if (allDates.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -467,7 +490,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             Icon(Icons.receipt_long_rounded, size: 60, color: Colors.grey.shade400),
             const SizedBox(height: 6),
             Text(
-              'No expenses yet',
+              'No activity yet',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -476,7 +499,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             ),
             const SizedBox(height: 4),
             Text(
-              'Tap + to add your first expense',
+              'Tap + for expenses or use Income for salary',
               style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
             ),
           ],
@@ -484,26 +507,30 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       );
     }
 
-    final sortedDates = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
+    final sortedDates = allDates.toList()..sort((a, b) => b.compareTo(a));
 
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       itemCount: sortedDates.length,
       itemBuilder: (context, index) {
         final dateStr = sortedDates[index];
-        final dayExpenses = grouped[dateStr]!;
+        final dayExpenses = grouped[dateStr] ?? [];
+        final dayIncome = incomeByDay[dateStr] ?? [];
         final isCollapsed = _collapsedDates.contains(dateStr);
         final dayTotal = dayExpenses
             .where((e) => e.category != 'Received')
             .fold(0.0, (sum, e) => sum + e.amount);
         final dayReceived = dayExpenses
-            .where((e) => e.category == 'Received')
-            .fold(0.0, (sum, e) => sum + e.amount);
+                .where((e) => e.category == 'Received')
+                .fold(0.0, (sum, e) => sum + e.amount) +
+            dayIncome.fold(0.0, (sum, e) => sum + e.amount);
 
         final date = DateTime.tryParse(dateStr);
         final displayDate = date != null
             ? DateFormat('dd MMM, EEEE').format(date)
             : dateStr;
+
+        final itemCount = dayExpenses.length + dayIncome.length;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -560,7 +587,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       ),
                     const SizedBox(width: 4),
                     Text(
-                      '(${dayExpenses.length})',
+                      '($itemCount)',
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.grey.shade500,
@@ -571,7 +598,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               ),
             ),
             // Expense tiles (hidden when collapsed)
-            if (!isCollapsed)
+            if (!isCollapsed) ...[
               ...dayExpenses.map((expense) => ExpenseTile(
                     expense: expense,
                     isSelected: _selectedExpenseId == expense.id,
@@ -580,6 +607,20 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         ? null
                         : () => _onExpenseLongPress(context, expense),
                   )),
+              ...dayIncome.map((entry) {
+                final created = DateTime.tryParse(entry.createdAt);
+                final dateStrIncome = created != null
+                    ? DateFormat('dd MMM yyyy, hh:mm a').format(created)
+                    : '';
+                return IncomeHistoryTile(
+                  entry: entry,
+                  dateStr: dateStrIncome,
+                  isSelected: false,
+                  onLongPress: null,
+                  onDeselect: null,
+                );
+              }),
+            ],
             if (!isCollapsed)
               Divider(height: 1, color: Colors.grey.shade200),
           ],
@@ -636,7 +677,7 @@ class _BalanceSummaryCard extends StatelessWidget {
           ),
           const SizedBox(height: 5),
           Text(
-            'BALANCE',
+            'ACCOUNTS',
             style: TextStyle(
               fontSize: 9,
               fontWeight: FontWeight.w700,

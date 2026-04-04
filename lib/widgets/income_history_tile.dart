@@ -67,6 +67,16 @@ class IncomeHistoryTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 2),
+                      if (entry.account.isNotEmpty)
+                        Text(
+                          entry.account,
+                          style: TextStyle(
+                            color: Colors.grey.shade500,
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       Text(
                         dateStr,
                         style: TextStyle(

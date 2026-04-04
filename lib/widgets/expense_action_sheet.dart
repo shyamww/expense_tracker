@@ -8,6 +8,8 @@ import '../screens/add_expense_screen.dart';
 Future<void> showExpenseActionsBottomSheet({
   required BuildContext context,
   required Expense expense,
+  /// When set, edit screen keeps this account (e.g. from account ledger).
+  String? lockAccountTo,
   VoidCallback? onClosed,
 }) async {
   if (expense.id == null) return;
@@ -53,7 +55,10 @@ Future<void> showExpenseActionsBottomSheet({
                   await Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => AddExpenseScreen(expenseToEdit: expense),
+                      builder: (_) => AddExpenseScreen(
+                        expenseToEdit: expense,
+                        lockAccountTo: lockAccountTo,
+                      ),
                     ),
                   );
                 },
