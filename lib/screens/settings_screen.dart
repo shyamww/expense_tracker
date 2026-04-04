@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../services/expense_reminder_service.dart';
+import 'backup_screen.dart';
 import 'category_management_screen.dart';
 
 /// Placeholder settings; extend as you add preferences (theme, currency, etc.).
@@ -71,8 +72,13 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             leading: Icon(Icons.cloud_outlined, color: Colors.grey.shade700),
             title: const Text('Backup & restore'),
-            subtitle: const Text('Open the Backup tab in the bottom bar'),
-            onTap: () => Navigator.pop(context),
+            subtitle: const Text('Export or import your data'),
+            onTap: () async {
+              await Navigator.push<void>(
+                context,
+                MaterialPageRoute(builder: (_) => const BackupScreen()),
+              );
+            },
           ),
           const Divider(height: 1),
           _SectionHeader(title: 'Support'),
