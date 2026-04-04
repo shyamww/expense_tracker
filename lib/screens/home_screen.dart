@@ -266,81 +266,70 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         child: const Icon(Icons.add_rounded, size: 28),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 12,
-              offset: const Offset(0, -4),
+      // Color/elevation must live on [BottomAppBar], not an outer [Container], or the top edge stays a straight line and hides the notch.
+      bottomNavigationBar: BottomAppBar(
+        shape: const CircularNotchedRectangle(),
+        notchMargin: 8,
+        height: 72,
+        padding: EdgeInsets.zero,
+        elevation: 10,
+        color: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.black.withValues(alpha: 0.12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+                child: InstallCountdownBar(),
+              ),
+            Expanded(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildBottomBarItem(
+                    icon: Icons.home_outlined,
+                    label: 'Home',
+                    onTap: _goHome,
+                  ),
+                  _buildBottomBarItem(
+                    icon: Icons.account_balance_wallet_outlined,
+                    label: 'Income',
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const IncomeScreen()),
+                      );
+                      if (mounted) _loadData();
+                    },
+                  ),
+                  const SizedBox(width: 48),
+                  _buildBottomBarItem(
+                    icon: Icons.bar_chart_rounded,
+                    label: 'Report',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ReportScreen()),
+                      );
+                    },
+                  ),
+                  _buildBottomBarItem(
+                    icon: Icons.cloud_sync_outlined,
+                    label: 'Backup',
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const BackupScreen()),
+                      );
+                      if (mounted) _loadData();
+                    },
+                  ),
+                ],
+              ),
             ),
           ],
-        ),
-        child: BottomAppBar(
-          shape: const CircularNotchedRectangle(),
-          notchMargin: 6,
-          height: 72,
-          padding: EdgeInsets.zero,
-          elevation: 0,
-          color: Colors.transparent,
-          surfaceTintColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-                  child: InstallCountdownBar(),
-                ),
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildBottomBarItem(
-                      icon: Icons.home_outlined,
-                      label: 'Home',
-                      onTap: _goHome,
-                    ),
-                    _buildBottomBarItem(
-                      icon: Icons.account_balance_wallet_outlined,
-                      label: 'Income',
-                      onTap: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const IncomeScreen()),
-                        );
-                        if (mounted) _loadData();
-                      },
-                    ),
-                    const SizedBox(width: 48),
-                    _buildBottomBarItem(
-                      icon: Icons.bar_chart_rounded,
-                      label: 'Report',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const ReportScreen()),
-                        );
-                      },
-                    ),
-                    _buildBottomBarItem(
-                      icon: Icons.cloud_sync_outlined,
-                      label: 'Backup',
-                      onTap: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const BackupScreen()),
-                        );
-                        if (mounted) _loadData();
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
