@@ -5,8 +5,10 @@ import 'providers/expense_provider.dart';
 import 'providers/income_provider.dart';
 import 'providers/category_provider.dart';
 import 'providers/account_provider.dart';
+import 'providers/app_lock_provider.dart';
 import 'providers/app_navigation_hub.dart';
 import 'screens/home_screen.dart';
+import 'screens/lock_screen.dart';
 import 'services/expense_reminder_service.dart';
 
 Future<void> main() async {
@@ -35,6 +37,7 @@ class ExpenseTrackerApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => IncomeProvider()),
         ChangeNotifierProvider(create: (_) => CategoryProvider()),
         ChangeNotifierProvider(create: (_) => AccountProvider()),
+        ChangeNotifierProvider(create: (_) => AppLockProvider()),
       ],
       child: MaterialApp(
         title: 'Expense Tracker',
@@ -68,8 +71,29 @@ class ExpenseTrackerApp extends StatelessWidget {
             ),
           ),
         ),
-        home: const HomeScreen(),
+        home: const _AppRoot(),
       ),
+    );
+  }
+}
+
+class _AppRoot extends StatelessWidget {
+  const _AppRoot();
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AppLockProvider>(
+      builder: (context, lock, _) {
+        if (!lock.isReady) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (lock.shouldShowLock) {
+          return const LockScreen();
+        }
+        return const HomeScreen();
+      },
     );
   }
 }
