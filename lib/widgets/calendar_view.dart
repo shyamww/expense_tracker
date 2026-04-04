@@ -144,7 +144,7 @@ class _CalendarViewState extends State<CalendarView> {
     // Cap row height so day cells stay compact; extra space sits below the grid (same summary on all tabs).
     return LayoutBuilder(
       builder: (context, constraints) {
-        const maxRow = 42.0;
+        const maxRow = 75.0;
         const padBottom = 4.0;
         final innerH = (constraints.maxHeight - padBottom).clamp(0.0, double.infinity);
         final perRow = rowCount > 0 ? innerH / rowCount : 0.0;
