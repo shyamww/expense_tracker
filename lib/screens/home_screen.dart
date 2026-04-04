@@ -13,6 +13,7 @@ import 'add_expense_screen.dart';
 import 'income_screen.dart';
 import 'report_screen.dart';
 import 'backup_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -43,19 +44,33 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     super.dispose();
   }
 
+  /// Same month + income reload as double-tapping a tab (e.g. Daily).
+  void _jumpToCurrentMonth() {
+    final now = DateTime.now();
+    setState(() {
+      _selectedMonth = DateTime(now.year, now.month);
+    });
+    context.read<IncomeProvider>().loadIncomeForMonth(
+      DateFormat('yyyy-MM').format(_selectedMonth),
+    );
+  }
+
   void _onTabDoubleTap(int index) {
     final now = DateTime.now();
     if (_lastTappedTab == index &&
         now.difference(_lastTapTime).inMilliseconds < 400) {
-      setState(() {
-        _selectedMonth = DateTime(now.year, now.month);
-      });
-      context.read<IncomeProvider>().loadIncomeForMonth(
-        DateFormat('yyyy-MM').format(_selectedMonth),
-      );
+      _jumpToCurrentMonth();
     }
     _lastTappedTab = index;
     _lastTapTime = now;
+  }
+
+  void _goHome() {
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    if (_tabController.index != 0) {
+      _tabController.animateTo(0);
+    }
+    _jumpToCurrentMonth();
   }
 
   Future<void> _loadData() async {
@@ -124,6 +139,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       appBar: AppBar(
         title: const Text('Expense Tracker'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Settings',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              );
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -275,6 +302,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     _buildBottomBarItem(
+                      icon: Icons.home_outlined,
+                      label: 'Home',
+                      onTap: _goHome,
+                    ),
+                    _buildBottomBarItem(
                       icon: Icons.account_balance_wallet_outlined,
                       label: 'Income',
                       onTap: () async {
@@ -285,6 +317,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         if (mounted) _loadData();
                       },
                     ),
+                    const SizedBox(width: 48),
                     _buildBottomBarItem(
                       icon: Icons.bar_chart_rounded,
                       label: 'Report',
@@ -295,7 +328,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         );
                       },
                     ),
-                    const SizedBox(width: 48),
                     _buildBottomBarItem(
                       icon: Icons.cloud_sync_outlined,
                       label: 'Backup',
@@ -306,11 +338,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                         );
                         if (mounted) _loadData();
                       },
-                    ),
-                    _buildBottomBarItem(
-                      icon: Icons.settings_outlined,
-                      label: 'More',
-                      onTap: () {},
                     ),
                   ],
                 ),
