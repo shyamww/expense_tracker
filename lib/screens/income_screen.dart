@@ -2,12 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/income_provider.dart';
+import '../providers/expense_provider.dart';
 import '../providers/account_provider.dart';
+import '../providers/category_provider.dart';
 import '../db/database_helper.dart';
 import '../models/income_entry.dart';
+import '../models/expense.dart';
 import '../widgets/income_history_tile.dart';
 import '../widgets/income_action_sheet.dart';
 import '../widgets/account_chip.dart';
+import '../widgets/expense_tile.dart';
+import '../widgets/expense_action_sheet.dart';
 
 class IncomeScreen extends StatefulWidget {
   const IncomeScreen({super.key});
@@ -24,7 +29,9 @@ class _IncomeScreenState extends State<IncomeScreen> {
   double _currentTotal = 0;
   double _carryForward = 0;
   List<IncomeEntry> _history = [];
+  List<Expense> _receivedExpenses = [];
   int? _selectedIncomeEntryId;
+  int? _selectedExpenseId;
   String? _selectedAccount;
 
   @override
@@ -47,18 +54,40 @@ class _IncomeScreenState extends State<IncomeScreen> {
   Future<void> _loadData() async {
     if (!mounted) return;
     final provider = context.read<IncomeProvider>();
+    final expenseProvider = context.read<ExpenseProvider>();
     await provider.loadIncomeForMonth(_currentMonth);
+    await expenseProvider.loadExpenses();
     final history = await DatabaseHelper().getIncomeHistoryForMonth(_currentMonth);
+    final received = expenseProvider
+        .expensesForMonth(_currentMonth)
+        .where((e) => e.category == CategoryProvider.kReceivedCategoryName)
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final receivedTotal =
+        received.fold<double>(0, (s, e) => s + e.amount);
     final carry = await DatabaseHelper().getCarryForwardForMonth(_currentMonth);
     if (!mounted) return;
     await context.read<AccountProvider>().refresh();
     if (mounted) {
       setState(() {
-        _currentTotal = provider.monthlyIncome;
+        _currentTotal = provider.monthlyIncome + receivedTotal;
         _carryForward = carry;
         _history = history;
+        _receivedExpenses = received;
       });
     }
+  }
+
+  List<({String createdAt, Object item})> _mergedHistory() {
+    final rows = <({String createdAt, Object item})>[];
+    for (final e in _history) {
+      rows.add((createdAt: e.createdAt, item: e));
+    }
+    for (final x in _receivedExpenses) {
+      rows.add((createdAt: x.createdAt, item: x));
+    }
+    rows.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return rows;
   }
 
   @override
@@ -164,9 +193,29 @@ class _IncomeScreenState extends State<IncomeScreen> {
     );
   }
 
+  Future<void> _onReceivedExpenseLongPress(BuildContext context, Expense expense) async {
+    if (expense.id == null) return;
+    setState(() {
+      _selectedExpenseId = expense.id;
+      _selectedIncomeEntryId = null;
+    });
+    await showExpenseActionsBottomSheet(
+      context: context,
+      expense: expense,
+      onClosed: () async {
+        if (!mounted) return;
+        setState(() => _selectedExpenseId = null);
+        await _loadData();
+      },
+    );
+  }
+
   Future<void> _onIncomeHistoryLongPress(BuildContext context, IncomeEntry entry) async {
     if (entry.id == null) return;
-    setState(() => _selectedIncomeEntryId = entry.id);
+    setState(() {
+      _selectedIncomeEntryId = entry.id;
+      _selectedExpenseId = null;
+    });
     await showIncomeHistoryActionsSheet(
       context: context,
       entry: entry,
@@ -335,6 +384,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
     final monthAnchor =
         DateTime.tryParse('$_currentMonth-01') ?? DateTime.now();
     final displayMonth = DateFormat('MMMM yyyy').format(monthAnchor);
+    final mergedHistory = _mergedHistory();
 
     return Scaffold(
       appBar: AppBar(
@@ -625,7 +675,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    '(${_history.length} entries)',
+                    '(${mergedHistory.length} entries)',
                     style: TextStyle(
                       color: Colors.grey.shade500,
                       fontSize: 13,
@@ -636,7 +686,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
             ),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 8)),
-          if (_history.isEmpty)
+          if (mergedHistory.isEmpty)
             SliverFillRemaining(
               hasScrollBody: false,
               child: Center(
@@ -655,22 +705,36 @@ class _IncomeScreenState extends State<IncomeScreen> {
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
-                    final entry = _history[index];
-                    final date = DateTime.tryParse(entry.createdAt);
-                    final dateStr = date != null
-                        ? DateFormat('dd MMM yyyy, hh:mm a').format(date)
-                        : '';
-                    return IncomeHistoryTile(
-                      entry: entry,
-                      dateStr: dateStr,
-                      isSelected: _selectedIncomeEntryId == entry.id,
-                      onDeselect: () => setState(() => _selectedIncomeEntryId = null),
-                      onLongPress: entry.id == null
+                    final row = mergedHistory[index];
+                    final item = row.item;
+                    if (item is IncomeEntry) {
+                      final entry = item;
+                      final date = DateTime.tryParse(entry.createdAt);
+                      final dateStr = date != null
+                          ? DateFormat('dd MMM yyyy, hh:mm a').format(date)
+                          : '';
+                      return IncomeHistoryTile(
+                        entry: entry,
+                        dateStr: dateStr,
+                        isSelected: _selectedIncomeEntryId == entry.id,
+                        onDeselect: () =>
+                            setState(() => _selectedIncomeEntryId = null),
+                        onLongPress: entry.id == null
+                            ? null
+                            : () => _onIncomeHistoryLongPress(context, entry),
+                      );
+                    }
+                    final expense = item as Expense;
+                    return ExpenseTile(
+                      expense: expense,
+                      isSelected: _selectedExpenseId == expense.id,
+                      onDeselect: () => setState(() => _selectedExpenseId = null),
+                      onLongPress: expense.id == null
                           ? null
-                          : () => _onIncomeHistoryLongPress(context, entry),
+                          : () => _onReceivedExpenseLongPress(context, expense),
                     );
                   },
-                  childCount: _history.length,
+                  childCount: mergedHistory.length,
                 ),
               ),
             ),
