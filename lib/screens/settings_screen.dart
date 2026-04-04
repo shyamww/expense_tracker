@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-
 import '../services/expense_reminder_service.dart';
+import '../widgets/feedback_form_sheet.dart';
 import 'backup_screen.dart';
 import 'category_management_screen.dart';
 
@@ -85,17 +85,25 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             leading: Icon(Icons.feedback_outlined, color: Colors.grey.shade700),
             title: const Text('Send feedback'),
-            subtitle: const Text('Ideas and bug reports — link your email or form later'),
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Add a mailto: link or in-app form when you are ready.'),
-                ),
-              );
-            },
+            subtitle: const Text('Sent with Web3Forms — your inbox is not in the app'),
+            onTap: () => _openFeedbackSheet(context),
           ),
         ],
       ),
+    );
+  }
+
+  static void _openFeedbackSheet(BuildContext context) {
+    // Use the Settings scaffold’s messenger — the sheet’s own context may not find one.
+    final messenger = ScaffoldMessenger.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => FeedbackFormSheet(scaffoldMessenger: messenger),
     );
   }
 
