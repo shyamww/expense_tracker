@@ -330,34 +330,39 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: _FintechSummaryCard(
-              label: 'Income',
-              value: income,
-              accent: const Color(0xFF2563EB),
-              icon: Icons.south_west_rounded,
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              flex: 3,
+              child: _FintechSummaryCard(
+                label: 'Income',
+                value: income,
+                accent: const Color(0xFF2563EB),
+                icon: Icons.south_west_rounded,
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _FintechSummaryCard(
-              label: 'Expense',
-              value: spent,
-              accent: const Color(0xFFDC2626),
-              icon: Icons.north_east_rounded,
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 3,
+              child: _FintechSummaryCard(
+                label: 'Expense',
+                value: spent,
+                accent: const Color(0xFFDC2626),
+                icon: Icons.north_east_rounded,
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _BalanceSummaryCard(
-              carryForward: carryForward,
-              balance: total,
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 4,
+              child: _BalanceSummaryCard(
+                carryForward: carryForward,
+                balance: total,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -576,43 +581,6 @@ class _BalanceSummaryCard extends StatelessWidget {
               letterSpacing: 0.6,
             ),
           ),
-          if (hasCarry) ...[
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              decoration: BoxDecoration(
-                color: carryBg,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: carryColor.withValues(alpha: 0.25)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.swap_horiz_rounded, size: 14, color: carryColor),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      'Carry forward',
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade700,
-                        height: 1.1,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '₹${carryForward.toStringAsFixed(0)}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      color: carryColor,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
           const SizedBox(height: 6),
           Text(
             '₹${balance.toStringAsFixed(0)}',
@@ -623,18 +591,43 @@ class _BalanceSummaryCard extends StatelessWidget {
               height: 1.05,
             ),
           ),
-          if (hasCarry)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                'incl. carry above',
-                style: TextStyle(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.grey.shade500,
-                ),
+          if (hasCarry) ...[
+            const SizedBox(height: 5),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+              decoration: BoxDecoration(
+                color: carryBg,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: carryColor.withValues(alpha: 0.22)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.swap_horiz_rounded, size: 12, color: carryColor),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      'Carry forward',
+                      style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
+                        height: 1.05,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '₹${carryForward.toStringAsFixed(0)}',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: carryColor,
+                    ),
+                  ),
+                ],
               ),
             ),
+          ],
         ],
       ),
     );
