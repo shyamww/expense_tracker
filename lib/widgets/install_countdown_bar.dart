@@ -1,11 +1,24 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _kInstallEpochKey = 'app_install_epoch_ms';
+const _kInstallBuildIdKey = 'app_install_countdown_build_id';
+const _kDevStampKey = 'app_install_countdown_dev_stamp';
 
-/// Days remaining from first launch (calendar days), for dev-build reinstall reminders.
+/// Optional: pass a new value each deploy to force a fresh 7-day window without
+/// bumping pubspec, e.g. `flutter run --dart-define=INSTALL_COUNTDOWN_STAMP=2`
+const String _kDevStampFromEnv =
+    String.fromEnvironment('INSTALL_COUNTDOWN_STAMP', defaultValue: '');
+
+/// Days remaining in a 7×24h window from the stored install instant.
+///
+/// The epoch resets when [PackageInfo] `version+buildNumber` changes (bump
+/// `version: x.y.z+N` in pubspec). In-place `flutter run` keeps UserDefaults on
+/// iOS, so the same +N keeps the old countdown until you delete the app, bump
+/// the build, or set [INSTALL_COUNTDOWN_STAMP].
 class InstallCountdownBar extends StatefulWidget {
   const InstallCountdownBar({super.key});
 
@@ -41,20 +54,37 @@ class _InstallCountdownBarState extends State<InstallCountdownBar>
   Future<void> _refresh() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final info = await PackageInfo.fromPlatform();
+      final buildId = '${info.version}+${info.buildNumber}';
+      final storedBuildId = prefs.getString(_kInstallBuildIdKey);
+      final devStampStored = prefs.getString(_kDevStampKey);
+
+      final buildChanged = storedBuildId != buildId;
+      final devStampChanged = _kDevStampFromEnv.isNotEmpty &&
+          devStampStored != _kDevStampFromEnv;
+
       var ms = prefs.getInt(_kInstallEpochKey);
-      if (ms == null) {
+      if (ms == null || buildChanged || devStampChanged) {
         ms = DateTime.now().millisecondsSinceEpoch;
         await prefs.setInt(_kInstallEpochKey, ms);
+        await prefs.setString(_kInstallBuildIdKey, buildId);
+        if (_kDevStampFromEnv.isNotEmpty) {
+          await prefs.setString(_kDevStampKey, _kDevStampFromEnv);
+        }
       }
 
       final install = DateTime.fromMillisecondsSinceEpoch(ms);
-      final installDay = DateTime(install.year, install.month, install.day);
+      final end = install.add(const Duration(days: 7));
       final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-      final elapsedDays = today.difference(installDay).inDays;
-      var left = 7 - elapsedDays;
-      if (left < 0) left = 0;
-      if (left > 7) left = 7;
+      final leftMillis = end.difference(now).inMilliseconds;
+
+      int left;
+      if (leftMillis <= 0) {
+        left = 0;
+      } else {
+        left = (leftMillis / Duration.millisecondsPerDay).ceil();
+        if (left > 7) left = 7;
+      }
 
       if (mounted) setState(() => _daysLeft = left);
     } catch (_) {
