@@ -11,13 +11,19 @@ class AccountProvider extends ChangeNotifier {
 
   List<AppAccount> _accounts = [];
   double _cumulativeBalance = 0;
+  Map<String, double> _balancesByAccount = {};
 
   List<AppAccount> get accounts => List.unmodifiable(_accounts);
   double get cumulativeBalance => _cumulativeBalance;
 
+  /// Net balance for [accountName] (income + Received − other expenses).
+  double balanceFor(String accountName) =>
+      _balancesByAccount[accountName] ?? 0;
+
   Future<void> refresh() async {
     _accounts = await _db.getAccounts();
     _cumulativeBalance = await _db.getCumulativeAccountBalance();
+    _balancesByAccount = await _db.getPerAccountBalances();
     notifyListeners();
   }
 

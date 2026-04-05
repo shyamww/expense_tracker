@@ -539,6 +539,54 @@ class DatabaseHelper {
     return expTotal + incTotal;
   }
 
+  /// Same rules as [getCumulativeAccountBalance], split by `account` name.
+  Future<Map<String, double>> getPerAccountBalances() async {
+    if (kIsWeb) {
+      final balances = <String, double>{};
+      for (final e in _webExpenses) {
+        final acct = e['account'] as String? ?? '';
+        if (acct.isEmpty) continue;
+        final amt = (e['amount'] as num).toDouble();
+        final cat = e['category'] as String? ?? '';
+        final delta = cat == 'Received' ? amt : -amt;
+        balances[acct] = (balances[acct] ?? 0) + delta;
+      }
+      for (final h in _webIncomeHistory) {
+        final acct = h['account'] as String? ?? '';
+        if (acct.isEmpty) continue;
+        balances[acct] =
+            (balances[acct] ?? 0) + (h['amount'] as num).toDouble();
+      }
+      return balances;
+    }
+    final db = await _getDb();
+    final exp = await db.rawQuery('''
+      SELECT account,
+        COALESCE(SUM(CASE WHEN category = 'Received' THEN amount ELSE -amount END), 0) AS t
+      FROM expenses
+      WHERE IFNULL(account, '') != ''
+      GROUP BY account
+    ''');
+    final inc = await db.rawQuery('''
+      SELECT account, COALESCE(SUM(amount), 0) AS t
+      FROM income_history
+      WHERE IFNULL(account, '') != ''
+      GROUP BY account
+    ''');
+    final balances = <String, double>{};
+    for (final row in exp) {
+      final name = row['account'] as String;
+      balances[name] =
+          (balances[name] ?? 0) + (row['t'] as num).toDouble();
+    }
+    for (final row in inc) {
+      final name = row['account'] as String;
+      balances[name] =
+          (balances[name] ?? 0) + (row['t'] as num).toDouble();
+    }
+    return balances;
+  }
+
   // ── Expense CRUD ──
 
   Future<int> insertExpense(Expense expense) async {

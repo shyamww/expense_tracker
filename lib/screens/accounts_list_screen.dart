@@ -66,6 +66,9 @@ class _AccountsListScreenState extends State<AccountsListScreen> {
             separatorBuilder: (_, __) => const SizedBox(height: 10),
             itemBuilder: (context, i) {
               final a = list[i];
+              final bal = ap.balanceFor(a.name);
+              final balColor =
+                  bal >= 0 ? const Color(0xFF059669) : const Color(0xFFDC2626);
               return Material(
                 color: Colors.white,
                 elevation: 0,
@@ -79,22 +82,38 @@ class _AccountsListScreenState extends State<AccountsListScreen> {
                     backgroundColor: Colors.indigo.shade50,
                     child: Icon(Icons.account_balance_rounded, color: Colors.indigo.shade700),
                   ),
-                  title: Text(
-                    a.name,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-                  ),
-                  subtitle: Text(
-                    'View transactions & balance',
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                  title: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          a.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '₹${bal.toStringAsFixed(0)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 16,
+                          color: balColor,
+                        ),
+                      ),
+                    ],
                   ),
                   trailing: Icon(Icons.chevron_right_rounded, color: Colors.grey.shade400),
-                  onTap: () {
-                    Navigator.push<void>(
+                  onTap: () async {
+                    await Navigator.push<void>(
                       context,
                       MaterialPageRoute<void>(
                         builder: (_) => AccountDetailScreen(accountName: a.name),
                       ),
                     );
+                    if (context.mounted) {
+                      context.read<AccountProvider>().refresh();
+                    }
                   },
                 ),
               );
