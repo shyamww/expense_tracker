@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/money.dart';
+
 class SummaryCard extends StatelessWidget {
   final double income;
   final double spent;
@@ -47,7 +49,7 @@ class SummaryCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '₹ ${balance.toStringAsFixed(2)}',
+            '₹ ${formatRupeesTwoDecimalsFromDouble(balance)}',
             style: theme.textTheme.headlineMedium?.copyWith(
               color: Colors.white,
               fontWeight: FontWeight.bold,
@@ -101,7 +103,7 @@ class SummaryCard extends StatelessWidget {
               style: const TextStyle(color: Colors.white70, fontSize: 12),
             ),
             Text(
-              '₹ ${amount.toStringAsFixed(2)}',
+              '₹ ${formatRupeesTwoDecimalsFromDouble(amount)}',
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,

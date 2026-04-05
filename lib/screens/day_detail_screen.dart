@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../core/money.dart';
 import '../providers/expense_provider.dart';
 import '../providers/income_provider.dart';
 import '../models/expense.dart';
@@ -71,15 +72,17 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
         .toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-    final totalSpent = dayExpenses
+    final spentPaisa = dayExpenses
         .where((e) => e.category != 'Received')
-        .fold(0.0, (sum, e) => sum + e.amount);
-    final totalReceivedFromExpenses = dayExpenses
+        .fold<int>(0, (sum, e) => sum + e.amount);
+    final receivedFromExpPaisa = dayExpenses
         .where((e) => e.category == 'Received')
-        .fold(0.0, (sum, e) => sum + e.amount);
-    final totalIncomeEntries =
-        dayIncome.fold(0.0, (sum, e) => sum + e.amount);
-    final totalReceived = totalReceivedFromExpenses + totalIncomeEntries;
+        .fold<int>(0, (sum, e) => sum + e.amount);
+    final incomeEntriesPaisa =
+        dayIncome.fold<int>(0, (sum, e) => sum + e.amount);
+    final totalSpent = rupeesFromPaisa(spentPaisa);
+    final totalReceived = rupeesFromPaisa(
+        receivedFromExpPaisa + incomeEntriesPaisa);
 
     final merged = <({String createdAt, Object item})>[];
     for (final e in dayExpenses) {
@@ -187,7 +190,7 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
           ),
           const SizedBox(height: 2),
           Text(
-            '₹${amount.toStringAsFixed(0)}',
+            '₹${formatRupeesTwoDecimalsFromDouble(amount)}',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,

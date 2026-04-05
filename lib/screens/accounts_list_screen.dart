@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../core/money.dart';
 import '../providers/account_provider.dart';
 import 'account_detail_screen.dart';
 
@@ -94,7 +95,7 @@ class _AccountsListScreenState extends State<AccountsListScreen> {
                         ),
                       ),
                       Text(
-                        '₹${bal.toStringAsFixed(0)}',
+                        '₹${formatRupeesTwoDecimalsFromDouble(bal)}',
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 16,

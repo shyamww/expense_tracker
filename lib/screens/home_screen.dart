@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../core/money.dart';
 import '../providers/expense_provider.dart';
 import '../models/expense.dart';
 import '../models/income_entry.dart';
@@ -517,13 +518,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         final dayExpenses = grouped[dateStr] ?? [];
         final dayIncome = incomeByDay[dateStr] ?? [];
         final isCollapsed = _collapsedDates.contains(dateStr);
-        final dayTotal = dayExpenses
+        final dayTotalPaisa = dayExpenses
             .where((e) => e.category != 'Received')
-            .fold(0.0, (sum, e) => sum + e.amount);
-        final dayReceived = dayExpenses
+            .fold<int>(0, (sum, e) => sum + e.amount);
+        final dayReceivedPaisa = dayExpenses
                 .where((e) => e.category == 'Received')
-                .fold(0.0, (sum, e) => sum + e.amount) +
-            dayIncome.fold(0.0, (sum, e) => sum + e.amount);
+                .fold<int>(0, (sum, e) => sum + e.amount) +
+            dayIncome.fold<int>(0, (sum, e) => sum + e.amount);
+        final dayTotal = rupeesFromPaisa(dayTotalPaisa);
+        final dayReceived = rupeesFromPaisa(dayReceivedPaisa);
 
         final date = DateTime.tryParse(dateStr);
         final displayDate = date != null
@@ -567,7 +570,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     const Spacer(),
                     if (dayTotal > 0)
                       Text(
-                        '₹${dayTotal.toStringAsFixed(0)}',
+                        '₹${formatRupeesTwoDecimalsFromDouble(dayTotal)}',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -578,7 +581,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                       const SizedBox(width: 8),
                     if (dayReceived > 0)
                       Text(
-                        '+₹${dayReceived.toStringAsFixed(0)}',
+                        '+₹${formatRupeesTwoDecimalsFromDouble(dayReceived)}',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -687,7 +690,7 @@ class _BalanceSummaryCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '₹${balance.toStringAsFixed(0)}',
+            '₹${formatRupeesTwoDecimalsFromDouble(balance)}',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w800,
@@ -725,7 +728,7 @@ class _BalanceSummaryCard extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          '₹${carryForward.toStringAsFixed(0)}',
+                          '₹${formatRupeesTwoDecimalsFromDouble(carryForward)}',
                           style: TextStyle(
                             fontSize: 9,
                             fontWeight: FontWeight.w800,
@@ -794,7 +797,7 @@ class _FintechSummaryCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '₹${value.toStringAsFixed(0)}',
+            '₹${formatRupeesTwoDecimalsFromDouble(value)}',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w800,

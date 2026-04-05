@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../core/money.dart';
 import '../providers/expense_provider.dart';
 import '../db/database_helper.dart';
 
@@ -50,7 +51,7 @@ class _MonthlyViewState extends State<MonthlyView> {
     final incomeRecords = await dbHelper.getIncomeForYear(_selectedYear);
     final Map<String, double> incomeMap = {};
     for (final inc in incomeRecords) {
-      incomeMap[inc.month] = inc.amount;
+      incomeMap[inc.month] = rupeesFromPaisa(inc.amount);
     }
 
     final Map<String, double> carryMap = {};
@@ -196,7 +197,7 @@ class _MonthlyViewState extends State<MonthlyView> {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          '₹${totalIncome.toStringAsFixed(0)}',
+                          '₹${formatRupeesTwoDecimalsFromDouble(totalIncome)}',
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 14,
@@ -207,7 +208,7 @@ class _MonthlyViewState extends State<MonthlyView> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '₹${totals.spent.toStringAsFixed(0)}',
+                          '₹${formatRupeesTwoDecimalsFromDouble(totals.spent)}',
                           style: TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 14,
@@ -219,8 +220,8 @@ class _MonthlyViewState extends State<MonthlyView> {
                         const SizedBox(height: 6),
                         Text(
                           balance >= 0
-                              ? 'Bal ₹${balance.toStringAsFixed(0)}'
-                              : 'Bal -₹${balance.abs().toStringAsFixed(0)}',
+                              ? 'Bal ₹${formatRupeesTwoDecimalsFromDouble(balance)}'
+                              : 'Bal -₹${formatRupeesTwoDecimalsFromDouble(balance.abs())}',
                           style: TextStyle(
                             fontWeight: FontWeight.w800,
                             fontSize: 13,

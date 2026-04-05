@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../core/money.dart';
 import '../models/expense.dart';
 import '../models/income_entry.dart';
 import '../screens/day_detail_screen.dart';
@@ -183,23 +184,29 @@ class _CalendarViewState extends State<CalendarView> {
   }
 
   Map<String, ({double spent, double received})> _computeDailyTotals(String monthPrefix) {
-    final Map<String, ({double spent, double received})> totals = {};
+    final Map<String, ({int spent, int received})> raw = {};
     for (final e in widget.expenses) {
       if (!e.date.startsWith(monthPrefix)) continue;
-      final current = totals[e.date] ?? (spent: 0.0, received: 0.0);
+      final current = raw[e.date] ?? (spent: 0, received: 0);
       if (e.category == 'Received') {
-        totals[e.date] = (spent: current.spent, received: current.received + e.amount);
+        raw[e.date] = (spent: current.spent, received: current.received + e.amount);
       } else {
-        totals[e.date] = (spent: current.spent + e.amount, received: current.received);
+        raw[e.date] = (spent: current.spent + e.amount, received: current.received);
       }
     }
     for (final inc in widget.incomeHistory) {
       final dk = _incomeEntryDateKey(inc);
       if (!dk.startsWith(monthPrefix)) continue;
-      final current = totals[dk] ?? (spent: 0.0, received: 0.0);
-      totals[dk] = (spent: current.spent, received: current.received + inc.amount);
+      final current = raw[dk] ?? (spent: 0, received: 0);
+      raw[dk] = (spent: current.spent, received: current.received + inc.amount);
     }
-    return totals;
+    return {
+      for (final e in raw.entries)
+        e.key: (
+          spent: rupeesFromPaisa(e.value.spent),
+          received: rupeesFromPaisa(e.value.received),
+        ),
+    };
   }
 
   String _incomeEntryDateKey(IncomeEntry e) {
@@ -388,6 +395,7 @@ class _CalendarViewState extends State<CalendarView> {
     );
   }
 
+  /// Compact labels in day cells: `1.2k` when ≥ 1000, else whole rupees.
   String _formatAmount(double amount) {
     if (amount >= 1000) {
       return '${(amount / 1000).toStringAsFixed(1)}k';

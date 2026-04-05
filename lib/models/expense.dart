@@ -1,6 +1,9 @@
+import '../core/money.dart';
+
 class Expense {
   final int? id;
-  final double amount;
+  /// Stored in paisa (1 ₹ = 100).
+  final int amount;
   final String category;
   /// Bank / cash account this expense debits (or credits if [category] is Received).
   final String account;
@@ -33,7 +36,7 @@ class Expense {
   factory Expense.fromMap(Map<String, dynamic> map) {
     return Expense(
       id: map['id'] as int?,
-      amount: (map['amount'] as num).toDouble(),
+      amount: amountPaisaFromMap(map['amount']),
       category: map['category'] as String,
       account: map['account'] as String? ?? '',
       note: map['note'] as String? ?? '',

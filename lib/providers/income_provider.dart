@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
+import '../core/money.dart';
 import '../db/database_helper.dart';
 import '../models/income.dart';
 import '../models/income_entry.dart';
@@ -13,7 +14,8 @@ class IncomeProvider extends ChangeNotifier {
   double _carryForward = 0.0;
   double get carryForward => _carryForward;
 
-  double get monthlyIncome => _currentIncome?.amount ?? 0.0;
+  double get monthlyIncome =>
+      rupeesFromPaisa(_currentIncome?.amount ?? 0);
 
   List<IncomeEntry> _allIncomeHistory = [];
   List<IncomeEntry> get allIncomeHistory => List.unmodifiable(_allIncomeHistory);
@@ -38,13 +40,13 @@ class IncomeProvider extends ChangeNotifier {
   }
 
   Future<void> setIncome(
-    double amount,
+    int amountPaisa,
     String month, {
     String note = '',
     DateTime? date,
     String account = '',
   }) async {
-    final income = Income(amount: amount, month: month);
+    final income = Income(amount: amountPaisa, month: month);
     await _dbHelper.upsertIncome(income, note: note, date: date, account: account);
     _currentIncome = await _dbHelper.getIncomeForMonth(month);
     _carryForward = await _dbHelper.getCarryForwardForMonth(month);

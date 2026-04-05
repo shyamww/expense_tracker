@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/money.dart';
 import '../models/income_entry.dart';
 
 /// Matches [ExpenseTile] interaction: Material + InkWell, selection ring, long press for actions.
@@ -88,7 +89,7 @@ class IncomeHistoryTile extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '+ ₹ ${entry.amount.toStringAsFixed(2)}',
+                  '+ ₹ ${formatRupeesFixed2FromPaisa(entry.amount)}',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,

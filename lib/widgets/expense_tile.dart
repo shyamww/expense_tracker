@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../core/money.dart';
 import '../models/expense.dart';
 import '../providers/category_provider.dart';
 
@@ -102,7 +103,7 @@ class ExpenseTile extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '₹ ${expense.amount.toStringAsFixed(2)}',
+                  '₹ ${formatRupeesFixed2FromPaisa(expense.amount)}',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,

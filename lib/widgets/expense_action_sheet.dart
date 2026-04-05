@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../core/money.dart';
 import '../models/expense.dart';
 import '../providers/expense_provider.dart';
 import '../screens/add_expense_screen.dart';
@@ -43,7 +44,7 @@ Future<void> showExpenseActionsBottomSheet({
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                 child: Text(
-                  '₹${expense.amount.toStringAsFixed(2)}',
+                  '₹${formatRupeesFixed2FromPaisa(expense.amount)}',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.grey.shade800),
                 ),
               ),

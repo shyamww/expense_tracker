@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/money.dart';
 import '../models/income_entry.dart';
 import '../db/database_helper.dart';
 
@@ -31,7 +32,7 @@ Future<void> showIncomeHistoryActionsSheet({
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                 child: Text(
-                  '+ ₹${entry.amount.toStringAsFixed(2)}',
+                  '+ ₹${formatRupeesFixed2FromPaisa(entry.amount)}',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,

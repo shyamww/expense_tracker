@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../core/money.dart';
 import '../models/expense.dart';
 import '../providers/expense_provider.dart';
 import '../providers/category_provider.dart';
@@ -39,9 +40,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     super.initState();
     final e = widget.expenseToEdit;
     if (e != null) {
-      _amountController.text = (e.amount % 1 == 0)
-          ? e.amount.toStringAsFixed(0)
-          : e.amount.toString();
+      _amountController.text = amountFieldTextFromPaisa(e.amount);
       _noteController.text = e.note;
       _selectedCategory = e.category;
       if (_accountLocked) {
@@ -128,8 +127,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       return;
     }
 
-    final amount = double.tryParse(amountText);
-    if (amount == null || amount <= 0) {
+    final amountPaisa = paisaFromRupeeString(amountText);
+    if (amountPaisa <= 0) {
       _showError('Please enter a valid amount');
       return;
     }
@@ -153,7 +152,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
     final expense = Expense(
       id: widget.expenseToEdit?.id,
-      amount: amount,
+      amount: amountPaisa,
       category: _selectedCategory!,
       account: accountName,
       note: _noteController.text.trim(),

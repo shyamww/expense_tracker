@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../core/money.dart';
 import '../providers/expense_provider.dart';
 import '../models/expense.dart';
 import '../providers/category_provider.dart';
@@ -58,11 +59,17 @@ class _ReportScreenState extends State<ReportScreen> {
     final to = DateFormat('yyyy-MM-dd').format(_toDate);
 
     final expenses = await provider.getExpensesByDateRange(from, to);
-    final totals = provider.getCategoryTotals(expenses);
-    final total = expenses.fold(0.0, (sum, e) => sum + e.amount);
+    // Spending only: "Received" is a credit, not an outflow — matches "Total Spending".
+    final spendingExpenses = expenses
+        .where((e) => e.category != CategoryProvider.kReceivedCategoryName)
+        .toList();
+    final totals = provider.getCategoryTotals(spendingExpenses);
+    final totalPaisa =
+        spendingExpenses.fold<int>(0, (sum, e) => sum + e.amount);
+    final total = rupeesFromPaisa(totalPaisa);
 
     setState(() {
-      _filteredExpenses = expenses;
+      _filteredExpenses = spendingExpenses;
       _categoryTotals = totals;
       _total = total;
       _hasSearched = true;
@@ -148,7 +155,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '₹ ${_total.toStringAsFixed(2)}',
+                      '₹ ${formatRupeesTwoDecimalsFromDouble(_total)}',
                       style: theme.textTheme.headlineMedium?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -238,7 +245,7 @@ class _ReportScreenState extends State<ReportScreen> {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              '₹ ${entry.value.toStringAsFixed(2)}',
+                              '₹ ${formatRupeesTwoDecimalsFromDouble(entry.value)}',
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15,

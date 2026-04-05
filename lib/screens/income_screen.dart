@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../core/money.dart';
 import '../providers/income_provider.dart';
 import '../providers/expense_provider.dart';
 import '../providers/account_provider.dart';
@@ -63,8 +64,9 @@ class _IncomeScreenState extends State<IncomeScreen> {
         .where((e) => e.category == CategoryProvider.kReceivedCategoryName)
         .toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    final receivedTotal =
-        received.fold<double>(0, (s, e) => s + e.amount);
+    final receivedPaisa =
+        received.fold<int>(0, (s, e) => s + e.amount);
+    final receivedTotal = rupeesFromPaisa(receivedPaisa);
     final carry = await DatabaseHelper().getCarryForwardForMonth(_currentMonth);
     if (!mounted) return;
     await context.read<AccountProvider>().refresh();
@@ -143,8 +145,8 @@ class _IncomeScreenState extends State<IncomeScreen> {
       return;
     }
 
-    final amount = double.tryParse(amountText);
-    if (amount == null || amount <= 0) {
+    final amountPaisa = paisaFromRupeeString(amountText);
+    if (amountPaisa <= 0) {
       _showError('Please enter a valid amount');
       return;
     }
@@ -157,7 +159,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
     final note = _noteController.text.trim();
     final month = DateFormat('yyyy-MM').format(_selectedDate);
     await context.read<IncomeProvider>().setIncome(
-      amount,
+      amountPaisa,
       month,
       note: note,
       date: _selectedDate,
@@ -175,7 +177,8 @@ class _IncomeScreenState extends State<IncomeScreen> {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('₹ ${amount.toStringAsFixed(2)} added to $month income!'),
+          content: Text(
+              '₹ ${formatRupeesFixed2FromPaisa(amountPaisa)} added to $month income!'),
           behavior: SnackBarBehavior.floating,
           backgroundColor: Colors.green.shade400,
         ),
@@ -231,9 +234,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
     if (entry.id == null) return;
     final messenger = ScaffoldMessenger.of(context);
     final amountCtrl = TextEditingController(
-      text: (entry.amount % 1 == 0)
-          ? entry.amount.toStringAsFixed(0)
-          : entry.amount.toString(),
+      text: amountFieldTextFromPaisa(entry.amount),
     );
     final noteCtrl = TextEditingController(text: entry.note);
     var pickedDate = DateTime.tryParse(entry.createdAt) ?? DateTime.now();
@@ -331,8 +332,9 @@ class _IncomeScreenState extends State<IncomeScreen> {
                         const SizedBox(height: 16),
                         FilledButton(
                           onPressed: () async {
-                            final amount = double.tryParse(amountCtrl.text.trim());
-                            if (amount == null || amount <= 0) {
+                            final paisa =
+                                paisaFromRupeeString(amountCtrl.text.trim());
+                            if (paisa <= 0) {
                               _showError('Please enter a valid amount');
                               return;
                             }
@@ -343,7 +345,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
                             final month = DateFormat('yyyy-MM').format(pickedDate);
                             final updated = IncomeEntry(
                               id: entry.id,
-                              amount: amount,
+                              amount: paisa,
                               month: month,
                               account: editAccount,
                               note: noteCtrl.text.trim(),
@@ -428,7 +430,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
                                     ),
                                   ),
                                   Text(
-                                    '₹ ${_currentTotal.toStringAsFixed(2)}',
+                                    '₹ ${formatRupeesTwoDecimalsFromDouble(_currentTotal)}',
                                     style: TextStyle(
                                       fontSize: 22,
                                       fontWeight: FontWeight.bold,
@@ -472,7 +474,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
                                 ),
                               ),
                               Text(
-                                '₹ ${_carryForward.toStringAsFixed(2)}',
+                                '₹ ${formatRupeesTwoDecimalsFromDouble(_carryForward)}',
                                 style: TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600,

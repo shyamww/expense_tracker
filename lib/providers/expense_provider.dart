@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
+import '../core/money.dart';
 import '../db/database_helper.dart';
 import '../models/expense.dart';
 
@@ -12,17 +13,19 @@ class ExpenseProvider extends ChangeNotifier {
   double get totalSpentThisMonth {
     final now = DateTime.now();
     final monthPrefix = DateFormat('yyyy-MM').format(now);
-    return _expenses
+    final paisa = _expenses
         .where((e) => e.date.startsWith(monthPrefix) && e.category != 'Received')
-        .fold(0.0, (sum, e) => sum + e.amount);
+        .fold<int>(0, (sum, e) => sum + e.amount);
+    return rupeesFromPaisa(paisa);
   }
 
   double get totalReceivedThisMonth {
     final now = DateTime.now();
     final monthPrefix = DateFormat('yyyy-MM').format(now);
-    return _expenses
+    final paisa = _expenses
         .where((e) => e.date.startsWith(monthPrefix) && e.category == 'Received')
-        .fold(0.0, (sum, e) => sum + e.amount);
+        .fold<int>(0, (sum, e) => sum + e.amount);
+    return rupeesFromPaisa(paisa);
   }
 
   Future<void> loadExpenses() async {
@@ -55,24 +58,28 @@ class ExpenseProvider extends ChangeNotifier {
   }
 
   Map<String, double> getCategoryTotals(List<Expense> expenseList) {
-    final Map<String, double> totals = {};
+    final Map<String, int> paisaByCat = {};
     for (final expense in expenseList) {
-      totals[expense.category] =
-          (totals[expense.category] ?? 0) + expense.amount;
+      paisaByCat[expense.category] =
+          (paisaByCat[expense.category] ?? 0) + expense.amount;
     }
-    return totals;
+    return {
+      for (final e in paisaByCat.entries) e.key: rupeesFromPaisa(e.value),
+    };
   }
 
   double totalSpentForMonth(String monthPrefix) {
-    return _expenses
+    final paisa = _expenses
         .where((e) => e.date.startsWith(monthPrefix) && e.category != 'Received')
-        .fold(0.0, (sum, e) => sum + e.amount);
+        .fold<int>(0, (sum, e) => sum + e.amount);
+    return rupeesFromPaisa(paisa);
   }
 
   double totalReceivedForMonth(String monthPrefix) {
-    return _expenses
+    final paisa = _expenses
         .where((e) => e.date.startsWith(monthPrefix) && e.category == 'Received')
-        .fold(0.0, (sum, e) => sum + e.amount);
+        .fold<int>(0, (sum, e) => sum + e.amount);
+    return rupeesFromPaisa(paisa);
   }
 
   List<Expense> expensesForMonth(String monthPrefix) {
@@ -95,17 +102,23 @@ class ExpenseProvider extends ChangeNotifier {
   }
 
   Map<String, ({double spent, double received})> getDailyTotals(String monthPrefix) {
-    final Map<String, ({double spent, double received})> totals = {};
+    final Map<String, ({int spent, int received})> raw = {};
     for (final e in _expenses) {
       if (!e.date.startsWith(monthPrefix)) continue;
-      final current = totals[e.date] ?? (spent: 0.0, received: 0.0);
+      final current = raw[e.date] ?? (spent: 0, received: 0);
       if (e.category == 'Received') {
-        totals[e.date] = (spent: current.spent, received: current.received + e.amount);
+        raw[e.date] = (spent: current.spent, received: current.received + e.amount);
       } else {
-        totals[e.date] = (spent: current.spent + e.amount, received: current.received);
+        raw[e.date] = (spent: current.spent + e.amount, received: current.received);
       }
     }
-    return totals;
+    return {
+      for (final e in raw.entries)
+        e.key: (
+          spent: rupeesFromPaisa(e.value.spent),
+          received: rupeesFromPaisa(e.value.received),
+        ),
+    };
   }
 
   Future<Map<String, ({double spent, double received})>> getMonthlyTotalsForYear(int year) async {
@@ -114,18 +127,21 @@ class ExpenseProvider extends ChangeNotifier {
 
     for (int m = 1; m <= 12; m++) {
       final monthKey = '$year-${m.toString().padLeft(2, '0')}';
-      double spent = 0;
-      double received = 0;
+      var spentPaisa = 0;
+      var receivedPaisa = 0;
       for (final e in yearExpenses) {
         if (e.date.startsWith(monthKey)) {
           if (e.category == 'Received') {
-            received += e.amount;
+            receivedPaisa += e.amount;
           } else {
-            spent += e.amount;
+            spentPaisa += e.amount;
           }
         }
       }
-      totals[monthKey] = (spent: spent, received: received);
+      totals[monthKey] = (
+        spent: rupeesFromPaisa(spentPaisa),
+        received: rupeesFromPaisa(receivedPaisa),
+      );
     }
     return totals;
   }

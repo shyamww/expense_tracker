@@ -10,6 +10,7 @@ import '../models/app_account.dart';
 import '../models/account_ledger_day.dart';
 import '../data/category_seed_data.dart';
 import '../data/account_seed_data.dart';
+import '../core/money.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -37,7 +38,7 @@ class DatabaseHelper {
     final path = p.join(dbPath, 'expense_tracker.db');
     _database = await openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -48,7 +49,7 @@ class DatabaseHelper {
     await db.execute('''
       CREATE TABLE expenses (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        amount REAL NOT NULL,
+        amount INTEGER NOT NULL,
         category TEXT NOT NULL,
         account TEXT NOT NULL DEFAULT '',
         note TEXT DEFAULT '',
@@ -59,14 +60,14 @@ class DatabaseHelper {
     await db.execute('''
       CREATE TABLE income (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        amount REAL NOT NULL,
+        amount INTEGER NOT NULL,
         month TEXT NOT NULL UNIQUE
       )
     ''');
     await db.execute('''
       CREATE TABLE income_history (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        amount REAL NOT NULL,
+        amount INTEGER NOT NULL,
         month TEXT NOT NULL,
         account TEXT NOT NULL DEFAULT '',
         note TEXT DEFAULT '',
@@ -142,6 +143,63 @@ class DatabaseHelper {
         );
       } catch (_) {}
     }
+    if (oldVersion < 5) {
+      await _migrateAmountColumnsToPaisa(db);
+    }
+  }
+
+  /// REAL rupees → INTEGER paisa for expenses, income, income_history.
+  Future<void> _migrateAmountColumnsToPaisa(Database db) async {
+    await db.execute('''
+      CREATE TABLE expenses_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        amount INTEGER NOT NULL,
+        category TEXT NOT NULL,
+        account TEXT NOT NULL DEFAULT '',
+        note TEXT DEFAULT '',
+        date TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      INSERT INTO expenses_new (id, amount, category, account, note, date, created_at)
+      SELECT id, CAST(ROUND(amount * 100) AS INTEGER), category, account, note, date, created_at
+      FROM expenses
+    ''');
+    await db.execute('DROP TABLE expenses');
+    await db.execute('ALTER TABLE expenses_new RENAME TO expenses');
+
+    await db.execute('''
+      CREATE TABLE income_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        amount INTEGER NOT NULL,
+        month TEXT NOT NULL UNIQUE
+      )
+    ''');
+    await db.execute('''
+      INSERT INTO income_new (id, amount, month)
+      SELECT id, CAST(ROUND(amount * 100) AS INTEGER), month FROM income
+    ''');
+    await db.execute('DROP TABLE income');
+    await db.execute('ALTER TABLE income_new RENAME TO income');
+
+    await db.execute('''
+      CREATE TABLE income_history_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        amount INTEGER NOT NULL,
+        month TEXT NOT NULL,
+        account TEXT NOT NULL DEFAULT '',
+        note TEXT DEFAULT '',
+        created_at TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      INSERT INTO income_history_new (id, amount, month, account, note, created_at)
+      SELECT id, CAST(ROUND(amount * 100) AS INTEGER), month, account, note, created_at
+      FROM income_history
+    ''');
+    await db.execute('DROP TABLE income_history');
+    await db.execute('ALTER TABLE income_history_new RENAME TO income_history');
   }
 
   Future<void> _insertSeedAccounts(DatabaseExecutor db) async {
@@ -504,24 +562,24 @@ class DatabaseHelper {
   /// other expenses debit. Only rows with a non-empty [Expense.account] / [IncomeEntry.account] count.
   Future<double> getCumulativeAccountBalance() async {
     if (kIsWeb) {
-      var total = 0.0;
+      var totalPaisa = 0;
       for (final e in _webExpenses) {
         final acct = e['account'] as String? ?? '';
         if (acct.isEmpty) continue;
-        final amt = (e['amount'] as num).toDouble();
+        final amt = amountPaisaFromMap(e['amount']);
         final cat = e['category'] as String? ?? '';
         if (cat == 'Received') {
-          total += amt;
+          totalPaisa += amt;
         } else {
-          total -= amt;
+          totalPaisa -= amt;
         }
       }
       for (final h in _webIncomeHistory) {
         final acct = h['account'] as String? ?? '';
         if (acct.isEmpty) continue;
-        total += (h['amount'] as num).toDouble();
+        totalPaisa += amountPaisaFromMap(h['amount']);
       }
-      return total;
+      return rupeesFromPaisa(totalPaisa);
     }
     final db = await _getDb();
     final exp = await db.rawQuery('''
@@ -534,19 +592,19 @@ class DatabaseHelper {
       FROM income_history
       WHERE IFNULL(account, '') != ''
     ''');
-    final expTotal = (exp.first['t'] as num).toDouble();
-    final incTotal = (inc.first['t'] as num).toDouble();
-    return expTotal + incTotal;
+    final expTotal = (exp.first['t'] as num).toInt();
+    final incTotal = (inc.first['t'] as num).toInt();
+    return rupeesFromPaisa(expTotal + incTotal);
   }
 
-  /// Same rules as [getCumulativeAccountBalance], split by `account` name.
-  Future<Map<String, double>> getPerAccountBalances() async {
+  /// Same rules as [getCumulativeAccountBalance], split by `account` name (values in paisa).
+  Future<Map<String, int>> getPerAccountBalances() async {
     if (kIsWeb) {
-      final balances = <String, double>{};
+      final balances = <String, int>{};
       for (final e in _webExpenses) {
         final acct = e['account'] as String? ?? '';
         if (acct.isEmpty) continue;
-        final amt = (e['amount'] as num).toDouble();
+        final amt = amountPaisaFromMap(e['amount']);
         final cat = e['category'] as String? ?? '';
         final delta = cat == 'Received' ? amt : -amt;
         balances[acct] = (balances[acct] ?? 0) + delta;
@@ -555,7 +613,7 @@ class DatabaseHelper {
         final acct = h['account'] as String? ?? '';
         if (acct.isEmpty) continue;
         balances[acct] =
-            (balances[acct] ?? 0) + (h['amount'] as num).toDouble();
+            (balances[acct] ?? 0) + amountPaisaFromMap(h['amount']);
       }
       return balances;
     }
@@ -573,16 +631,16 @@ class DatabaseHelper {
       WHERE IFNULL(account, '') != ''
       GROUP BY account
     ''');
-    final balances = <String, double>{};
+    final balances = <String, int>{};
     for (final row in exp) {
       final name = row['account'] as String;
       balances[name] =
-          (balances[name] ?? 0) + (row['t'] as num).toDouble();
+          (balances[name] ?? 0) + (row['t'] as num).toInt();
     }
     for (final row in inc) {
       final name = row['account'] as String;
       balances[name] =
-          (balances[name] ?? 0) + (row['t'] as num).toDouble();
+          (balances[name] ?? 0) + (row['t'] as num).toInt();
     }
     return balances;
   }
@@ -698,7 +756,7 @@ class DatabaseHelper {
     if (kIsWeb) {
       final index = _webIncome.indexWhere((m) => m['month'] == income.month);
       if (index != -1) {
-        final oldAmount = (_webIncome[index]['amount'] as num).toDouble();
+        final oldAmount = amountPaisaFromMap(_webIncome[index]['amount']);
         _webIncome[index]['amount'] = oldAmount + income.amount;
         return 1;
       } else {
@@ -712,7 +770,7 @@ class DatabaseHelper {
     final existing = await db.query('income',
         where: 'month = ?', whereArgs: [income.month]);
     if (existing.isNotEmpty) {
-      final oldAmount = (existing.first['amount'] as num).toDouble();
+      final oldAmount = amountPaisaFromMap(existing.first['amount']);
       final newAmount = oldAmount + income.amount;
       return await db.update('income', {'amount': newAmount},
           where: 'month = ?', whereArgs: [income.month]);
@@ -783,7 +841,7 @@ class DatabaseHelper {
     if (kIsWeb) {
       final sum = _webIncomeHistory
           .where((m) => m['month'] == month)
-          .fold<double>(0, (s, m) => s + (m['amount'] as num).toDouble());
+          .fold<int>(0, (s, m) => s + amountPaisaFromMap(m['amount']));
       final idx = _webIncome.indexWhere((m) => m['month'] == month);
       if (sum == 0) {
         if (idx != -1) _webIncome.removeAt(idx);
@@ -796,9 +854,9 @@ class DatabaseHelper {
     }
     final db = await _getDb();
     final maps = await db.query('income_history', where: 'month = ?', whereArgs: [month]);
-    var total = 0.0;
+    var total = 0;
     for (final m in maps) {
-      total += (m['amount'] as num).toDouble();
+      total += (m['amount'] as num).toInt();
     }
     final existing = await db.query('income', where: 'month = ?', whereArgs: [month]);
     if (total == 0) {
@@ -887,22 +945,23 @@ class DatabaseHelper {
   Future<double> getCarryForwardForMonth(String month) async {
     // Sum all (income + received - spent) for every month before `month`
     final firstDay = '$month-01';
-    double totalIncome = 0;
-    double totalSpent = 0;
-    double totalReceived = 0;
+    var totalIncomePaisa = 0;
+    var totalSpentPaisa = 0;
+    var totalReceivedPaisa = 0;
 
     if (kIsWeb) {
       for (final m in _webIncome) {
         if ((m['month'] as String).compareTo(month) < 0) {
-          totalIncome += (m['amount'] as num).toDouble();
+          totalIncomePaisa += amountPaisaFromMap(m['amount']);
         }
       }
       for (final e in _webExpenses) {
         if ((e['date'] as String).compareTo(firstDay) < 0) {
+          final amt = amountPaisaFromMap(e['amount']);
           if (e['category'] == 'Received') {
-            totalReceived += (e['amount'] as num).toDouble();
+            totalReceivedPaisa += amt;
           } else {
-            totalSpent += (e['amount'] as num).toDouble();
+            totalSpentPaisa += amt;
           }
         }
       }
@@ -912,22 +971,23 @@ class DatabaseHelper {
         'SELECT COALESCE(SUM(amount), 0) as total FROM income WHERE month < ?',
         [month],
       );
-      totalIncome = (incomeResult.first['total'] as num).toDouble();
+      totalIncomePaisa = (incomeResult.first['total'] as num).toInt();
 
       final spentResult = await db.rawQuery(
         "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE date < ? AND category != 'Received'",
         [firstDay],
       );
-      totalSpent = (spentResult.first['total'] as num).toDouble();
+      totalSpentPaisa = (spentResult.first['total'] as num).toInt();
 
       final receivedResult = await db.rawQuery(
         "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE date < ? AND category = 'Received'",
         [firstDay],
       );
-      totalReceived = (receivedResult.first['total'] as num).toDouble();
+      totalReceivedPaisa = (receivedResult.first['total'] as num).toInt();
     }
 
-    return totalIncome + totalReceived - totalSpent;
+    return rupeesFromPaisa(
+        totalIncomePaisa + totalReceivedPaisa - totalSpentPaisa);
   }
 
   /// Net balance brought into [month] for [account] (income_history with month \< M
@@ -935,24 +995,24 @@ class DatabaseHelper {
   Future<double> getAccountCarryForwardForMonth(String account, String month) async {
     if (account.isEmpty) return 0;
     final firstDay = '$month-01';
-    double fromIncomeHistory = 0;
-    double fromExpenses = 0;
+    var fromIncomeHistoryPaisa = 0;
+    var fromExpensesPaisa = 0;
 
     if (kIsWeb) {
       for (final h in _webIncomeHistory) {
         if ((h['account'] as String? ?? '') != account) continue;
         if ((h['month'] as String).compareTo(month) < 0) {
-          fromIncomeHistory += (h['amount'] as num).toDouble();
+          fromIncomeHistoryPaisa += amountPaisaFromMap(h['amount']);
         }
       }
       for (final e in _webExpenses) {
         if ((e['account'] as String? ?? '') != account) continue;
         if ((e['date'] as String).compareTo(firstDay) >= 0) continue;
-        final amt = (e['amount'] as num).toDouble();
+        final amt = amountPaisaFromMap(e['amount']);
         if (e['category'] == 'Received') {
-          fromExpenses += amt;
+          fromExpensesPaisa += amt;
         } else {
-          fromExpenses -= amt;
+          fromExpensesPaisa -= amt;
         }
       }
     } else {
@@ -961,7 +1021,7 @@ class DatabaseHelper {
         'SELECT COALESCE(SUM(amount), 0) AS t FROM income_history WHERE account = ? AND month < ?',
         [account, month],
       );
-      fromIncomeHistory = (inc.first['t'] as num).toDouble();
+      fromIncomeHistoryPaisa = (inc.first['t'] as num).toInt();
       final exp = await db.rawQuery(
         '''
         SELECT COALESCE(SUM(CASE WHEN category = 'Received' THEN amount ELSE -amount END), 0) AS t
@@ -969,10 +1029,10 @@ class DatabaseHelper {
         ''',
         [account, firstDay],
       );
-      fromExpenses = (exp.first['t'] as num).toDouble();
+      fromExpensesPaisa = (exp.first['t'] as num).toInt();
     }
 
-    return fromIncomeHistory + fromExpenses;
+    return rupeesFromPaisa(fromIncomeHistoryPaisa + fromExpensesPaisa);
   }
 
   String _incomeEntryDateKey(IncomeEntry e) {
@@ -1012,17 +1072,17 @@ class DatabaseHelper {
         .where((e) => e.account == account)
         .toList();
 
-    var monthSpent = 0.0;
-    var monthIncome = 0.0;
+    var monthSpentPaisa = 0;
+    var monthIncomePaisa = 0;
     for (final e in monthExpenses) {
       if (e.category == 'Received') {
-        monthIncome += e.amount;
+        monthIncomePaisa += e.amount;
       } else {
-        monthSpent += e.amount;
+        monthSpentPaisa += e.amount;
       }
     }
     for (final h in monthIncomeRows) {
-      monthIncome += h.amount;
+      monthIncomePaisa += h.amount;
     }
 
     final byDay = <String, ({List<Expense> ex, List<IncomeEntry> inc})>{};
@@ -1050,8 +1110,8 @@ class DatabaseHelper {
 
     return AccountMonthLedger(
       carryForward: carryForward,
-      monthIncome: monthIncome,
-      monthSpent: monthSpent,
+      monthIncome: rupeesFromPaisa(monthIncomePaisa),
+      monthSpent: rupeesFromPaisa(monthSpentPaisa),
       days: days,
     );
   }
@@ -1115,7 +1175,7 @@ class DatabaseHelper {
     final accountRows = await _getAllAccounts();
 
     final data = {
-      'version': 4,
+      'version': 5,
       'exported_at': DateTime.now().toIso8601String(),
       'accounts': accountRows
           .map((m) => {
@@ -1133,23 +1193,32 @@ class DatabaseHelper {
               })
           .toList(),
       'expenses': expenses.map((e) => {
-        'amount': e.amount,
+        'amount_paisa': e.amount,
+        'amount': rupeesFromPaisa(e.amount),
         'category': e.category,
         'account': e.account,
         'note': e.note,
         'date': e.date,
         'created_at': e.createdAt,
       }).toList(),
-      'income': incomeList.map((m) => {
-        'amount': m['amount'],
-        'month': m['month'],
+      'income': incomeList.map((m) {
+        final p = amountPaisaFromMap(m['amount']);
+        return {
+          'amount_paisa': p,
+          'amount': rupeesFromPaisa(p),
+          'month': m['month'],
+        };
       }).toList(),
-      'income_history': historyList.map((m) => {
-        'amount': m['amount'],
-        'month': m['month'],
-        'account': m['account'] ?? '',
-        'note': m['note'] ?? '',
-        'created_at': m['created_at'],
+      'income_history': historyList.map((m) {
+        final p = amountPaisaFromMap(m['amount']);
+        return {
+          'amount_paisa': p,
+          'amount': rupeesFromPaisa(p),
+          'month': m['month'],
+          'account': m['account'] ?? '',
+          'note': m['note'] ?? '',
+          'created_at': m['created_at'],
+        };
       }).toList(),
     };
 
@@ -1196,11 +1265,15 @@ class DatabaseHelper {
           map['created_at'] = DateTime.now().toIso8601String();
         }
         map['account'] = map['account'] as String? ?? '';
+        map['amount'] = backupAmountToPaisa(map);
+        map.remove('amount_paisa');
         _webExpenses.add(map);
       }
       for (final i in incomeList) {
         final map = Map<String, dynamic>.from(i as Map);
         map['id'] = _nextIncomeId++;
+        map['amount'] = backupAmountToPaisa(map);
+        map.remove('amount_paisa');
         _webIncome.add(map);
       }
       for (final h in historyList) {
@@ -1210,6 +1283,8 @@ class DatabaseHelper {
           map['created_at'] = DateTime.now().toIso8601String();
         }
         map['account'] = map['account'] as String? ?? '';
+        map['amount'] = backupAmountToPaisa(map);
+        map.remove('amount_paisa');
         _webIncomeHistory.add(map);
       }
       if (catList != null && catList.isNotEmpty) {
@@ -1258,6 +1333,8 @@ class DatabaseHelper {
         }
         map['account'] = map['account'] as String? ?? '';
         map.remove('id');
+        map['amount'] = backupAmountToPaisa(map);
+        map.remove('amount_paisa');
         await txn.insert('expenses', map);
       }
 
@@ -1280,6 +1357,8 @@ class DatabaseHelper {
       for (final i in incomeList) {
         final map = Map<String, dynamic>.from(i as Map);
         map.remove('id');
+        map['amount'] = backupAmountToPaisa(map);
+        map.remove('amount_paisa');
         await txn.insert('income', map);
       }
       for (final h in historyList) {
@@ -1289,6 +1368,8 @@ class DatabaseHelper {
         }
         map['account'] = map['account'] as String? ?? '';
         map.remove('id');
+        map['amount'] = backupAmountToPaisa(map);
+        map.remove('amount_paisa');
         await txn.insert('income_history', map);
       }
     });

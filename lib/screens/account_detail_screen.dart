@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../core/money.dart';
 import '../db/database_helper.dart';
 import '../models/account_ledger_day.dart';
 import '../models/expense.dart';
@@ -115,9 +116,7 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final fixedAccount = widget.accountName;
     final amountCtrl = TextEditingController(
-      text: (entry.amount % 1 == 0)
-          ? entry.amount.toStringAsFixed(0)
-          : entry.amount.toString(),
+      text: amountFieldTextFromPaisa(entry.amount),
     );
     final noteCtrl = TextEditingController(text: entry.note);
     var pickedDate = DateTime.tryParse(entry.createdAt) ?? DateTime.now();
@@ -203,15 +202,16 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                     const SizedBox(height: 16),
                     FilledButton(
                       onPressed: () async {
-                        final amount = double.tryParse(amountCtrl.text.trim());
-                        if (amount == null || amount <= 0) {
+                        final paisa =
+                            paisaFromRupeeString(amountCtrl.text.trim());
+                        if (paisa <= 0) {
                           _showError('Please enter a valid amount');
                           return;
                         }
                         final month = DateFormat('yyyy-MM').format(pickedDate);
                         final updated = IncomeEntry(
                           id: entry.id,
-                          amount: amount,
+                          amount: paisa,
                           month: month,
                           account: fixedAccount,
                           note: noteCtrl.text.trim(),
@@ -494,7 +494,7 @@ class _AccountSummaryStrip extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '₹${bal.toStringAsFixed(0)}',
+                      '₹${formatRupeesTwoDecimalsFromDouble(bal)}',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
@@ -525,7 +525,7 @@ class _AccountSummaryStrip extends StatelessWidget {
         ),
         const SizedBox(height: 2),
         Text(
-          '₹${value.toStringAsFixed(0)}',
+          '₹${formatRupeesTwoDecimalsFromDouble(value)}',
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w700,
@@ -567,13 +567,15 @@ class _AccountDaySection extends StatelessWidget {
         ? DateFormat('dd MMM, EEEE').format(date)
         : day.date;
 
-    final daySpent = day.expenses
+    final spentPaisa = day.expenses
         .where((e) => e.category != 'Received')
-        .fold(0.0, (s, e) => s + e.amount);
-    final dayReceived = day.expenses
+        .fold<int>(0, (s, e) => s + e.amount);
+    final receivedPaisa = day.expenses
             .where((e) => e.category == 'Received')
-            .fold(0.0, (s, e) => s + e.amount) +
-        day.incomeEntries.fold(0.0, (s, e) => s + e.amount);
+            .fold<int>(0, (s, e) => s + e.amount) +
+        day.incomeEntries.fold<int>(0, (s, e) => s + e.amount);
+    final daySpent = rupeesFromPaisa(spentPaisa);
+    final dayReceived = rupeesFromPaisa(receivedPaisa);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -601,7 +603,7 @@ class _AccountDaySection extends StatelessWidget {
                 const Spacer(),
                 if (daySpent > 0)
                   Text(
-                    '₹${daySpent.toStringAsFixed(0)}',
+                    '₹${formatRupeesTwoDecimalsFromDouble(daySpent)}',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -611,7 +613,7 @@ class _AccountDaySection extends StatelessWidget {
                 if (daySpent > 0 && dayReceived > 0) const SizedBox(width: 8),
                 if (dayReceived > 0)
                   Text(
-                    '+₹${dayReceived.toStringAsFixed(0)}',
+                    '+₹${formatRupeesTwoDecimalsFromDouble(dayReceived)}',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
