@@ -18,26 +18,23 @@ class _ReportScreenState extends State<ReportScreen> {
   DateTime _fromDate =
       DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTime _toDate = DateTime.now();
+
   List<Expense> _filteredExpenses = [];
   Map<String, double> _categoryTotals = {};
   double _total = 0;
   bool _hasSearched = false;
 
   Future<void> _pickDate({required bool isFrom}) async {
-    final initial = isFrom ? _fromDate : _toDate;
     final picked = await showDatePicker(
       context: context,
-      initialDate: initial,
+      initialDate: isFrom ? _fromDate : _toDate,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
     );
+
     if (picked != null) {
       setState(() {
-        if (isFrom) {
-          _fromDate = picked;
-        } else {
-          _toDate = picked;
-        }
+        isFrom ? _fromDate = picked : _toDate = picked;
       });
     }
   }
@@ -45,27 +42,28 @@ class _ReportScreenState extends State<ReportScreen> {
   Future<void> _search() async {
     if (_fromDate.isAfter(_toDate)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('"From" date must be before "To" date'),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.red.shade400,
-        ),
+        const SnackBar(content: Text('"From" must be before "To"')),
       );
       return;
     }
 
     final provider = context.read<ExpenseProvider>();
+
     final from = DateFormat('yyyy-MM-dd').format(_fromDate);
     final to = DateFormat('yyyy-MM-dd').format(_toDate);
 
     final expenses = await provider.getExpensesByDateRange(from, to);
-    // Spending only: "Received" is a credit, not an outflow — matches "Total Spending".
+
+    // 🔥 Remove "Received"
     final spendingExpenses = expenses
         .where((e) => e.category != CategoryProvider.kReceivedCategoryName)
         .toList();
+
     final totals = provider.getCategoryTotals(spendingExpenses);
+
     final totalPaisa =
         spendingExpenses.fold<int>(0, (sum, e) => sum + e.amount);
+
     final total = rupeesFromPaisa(totalPaisa);
 
     setState(() {
@@ -82,180 +80,197 @@ class _ReportScreenState extends State<ReportScreen> {
     final catProv = context.watch<CategoryProvider>();
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF7F7F7), // 👈 important
       appBar: AppBar(
         title: const Text('Reports'),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Date Range Pickers
+            /// DATE PICKERS
             Row(
               children: [
                 Expanded(
                   child: _buildDateButton(
-                    label: 'From',
-                    date: _fromDate,
-                    onTap: () => _pickDate(isFrom: true),
+                    'From',
+                    _fromDate,
+                    () => _pickDate(isFrom: true),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Expanded(
                   child: _buildDateButton(
-                    label: 'To',
-                    date: _toDate,
-                    onTap: () => _pickDate(isFrom: false),
+                    'To',
+                    _toDate,
+                    () => _pickDate(isFrom: false),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+
+            const SizedBox(height: 14),
+
+            /// SEARCH BUTTON
             SizedBox(
               width: double.infinity,
-              height: 48,
+              height: 46,
               child: FilledButton.icon(
                 onPressed: _search,
-                icon: const Icon(Icons.search, size: 20),
-                label: const Text(
-                  'Search',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                ),
-                style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
+                icon: const Icon(Icons.search),
+                label: const Text('Search'),
               ),
             ),
 
             if (_hasSearched) ...[
-              const SizedBox(height: 28),
+              const SizedBox(height: 18),
 
-              // Total Spending Card
+              /// 🔥 ULTRA COMPACT BAR
               Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      theme.colorScheme.primary,
-                      theme.colorScheme.primary.withOpacity(0.8),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(16),
+                  color: theme.colorScheme.primary,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: Column(
+                child: Row(
                   children: [
-                    Text(
-                      'Total Spending',
-                      style: theme.textTheme.bodyMedium
-                          ?.copyWith(color: Colors.white70),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.trending_down,
+                          color: Colors.white, size: 18),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Spending',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                    const Spacer(),
                     Text(
                       '₹ ${formatRupeesTwoDecimalsFromDouble(_total)}',
-                      style: theme.textTheme.headlineMedium?.copyWith(
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(width: 8),
                     Text(
-                      '${_filteredExpenses.length} transaction${_filteredExpenses.length == 1 ? '' : 's'}',
-                      style: const TextStyle(color: Colors.white60, fontSize: 13),
+                      '${_filteredExpenses.length}',
+                      style: const TextStyle(color: Colors.white60),
                     ),
                   ],
                 ),
               ),
 
-              // Pie Chart
+              /// PIE CHART
               if (_categoryTotals.isNotEmpty) ...[
-                const SizedBox(height: 28),
-                Text(
-                  'Category Breakdown',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 22),
                 SizedBox(
                   height: 220,
                   child: PieChart(
                     PieChartData(
-                      sectionsSpace: 2,
-                      centerSpaceRadius: 40,
+                      sectionsSpace: 3,
+                      centerSpaceRadius: 45,
                       sections: _buildPieChartSections(),
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
-                // Category List
+
+                const SizedBox(height: 18),
+
+                /// 🔥 CATEGORY CARDS (FINAL DESIGN)
                 ..._categoryTotals.entries.map((entry) {
                   final info = catProv.resolveVisual(entry.key);
                   final percentage =
                       _total > 0 ? (entry.value / _total * 100) : 0.0;
+
                   return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(14),
+                    margin: const EdgeInsets.only(bottom: 14),
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
                       border: Border.all(
-                        color: theme.dividerColor.withOpacity(0.1),
+                        color: Colors.grey.shade200,
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.03),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: Row(
                       children: [
+                        /// ICON
                         Container(
-                          padding: const EdgeInsets.all(8),
+                          width: 50,
+                          height: 50,
                           decoration: BoxDecoration(
                             color: info.color.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(14),
                           ),
-                          child: Icon(info.icon, color: info.color, size: 20),
+                          child:
+                              Icon(info.icon, color: info.color, size: 24),
                         ),
-                        const SizedBox(width: 12),
+
+                        const SizedBox(width: 14),
+
+                        /// TEXT + BAR
                         Expanded(
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
                             children: [
                               Text(
                                 entry.key,
                                 style: const TextStyle(
-                                    fontWeight: FontWeight.w600, fontSize: 15),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 10),
                               ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
+                                borderRadius: BorderRadius.circular(6),
                                 child: LinearProgressIndicator(
                                   value: percentage / 100,
+                                  minHeight: 6,
                                   backgroundColor:
                                       Colors.grey.shade200,
-                                  color: info.color,
-                                  minHeight: 5,
+                                  color:
+                                      info.color.withOpacity(0.9),
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(width: 12),
+
+                        const SizedBox(width: 14),
+
+                        /// AMOUNT
                         Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
+                          crossAxisAlignment:
+                              CrossAxisAlignment.end,
                           children: [
                             Text(
                               '₹ ${formatRupeesTwoDecimalsFromDouble(entry.value)}',
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
-                                fontSize: 15,
+                                fontSize: 16,
                               ),
                             ),
+                            const SizedBox(height: 4),
                             Text(
                               '${percentage.toStringAsFixed(1)}%',
                               style: TextStyle(
                                 color: Colors.grey.shade500,
-                                fontSize: 12,
                               ),
                             ),
                           ],
@@ -267,77 +282,40 @@ class _ReportScreenState extends State<ReportScreen> {
               ],
 
               if (_categoryTotals.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 40),
-                  child: Center(
-                    child: Column(
-                      children: [
-                        Icon(Icons.search_off,
-                            size: 56, color: Colors.grey.shade400),
-                        const SizedBox(height: 12),
-                        Text(
-                          'No expenses found in this range',
-                          style: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 15,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                const Padding(
+                  padding: EdgeInsets.only(top: 40),
+                  child: Center(child: Text('No expenses found')),
                 ),
-            ],
+            ]
           ],
         ),
       ),
     );
   }
 
-  Widget _buildDateButton({
-    required String label,
-    required DateTime date,
-    required VoidCallback onTap,
-  }) {
+  Widget _buildDateButton(
+      String label, DateTime date, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade400),
-          borderRadius: BorderRadius.circular(14),
+          color: Colors.white,
+          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(12),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(Icons.calendar_today,
-                    size: 16, color: Colors.grey.shade600),
-                const SizedBox(width: 6),
-                Text(
-                  DateFormat('dd MMM yyyy').format(date),
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w500),
-                ),
-              ],
-            ),
-          ],
-        ),
+        child: Text(DateFormat('dd MMM yyyy').format(date)),
       ),
     );
   }
 
   List<PieChartSectionData> _buildPieChartSections() {
     final catProv = context.read<CategoryProvider>();
+
     return _categoryTotals.entries.map((entry) {
       final info = catProv.resolveVisual(entry.key);
-      final percentage = _total > 0 ? (entry.value / _total * 100) : 0.0;
+      final percentage =
+          _total > 0 ? (entry.value / _total * 100) : 0.0;
 
       return PieChartSectionData(
         value: entry.value,
@@ -347,7 +325,6 @@ class _ReportScreenState extends State<ReportScreen> {
         titleStyle: const TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.bold,
-          fontSize: 12,
         ),
       );
     }).toList();
