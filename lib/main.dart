@@ -10,9 +10,16 @@ import 'providers/app_navigation_hub.dart';
 import 'screens/home_screen.dart';
 import 'screens/lock_screen.dart';
 import 'services/expense_reminder_service.dart';
+import 'package:flutter/services.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 🔒 LOCK ORIENTATION HERE
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+  ]);
+  
   final appNavHub = AppNavigationHub();
   if (!kIsWeb) {
     ExpenseReminderService.onReminderNotificationTap =
