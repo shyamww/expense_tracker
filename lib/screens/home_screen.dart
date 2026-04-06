@@ -197,16 +197,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-            child: _buildMonthNavigator(theme),
-          ),
-
-          _buildSummaryCards(
+          _buildUnifiedSummaryCard(
             carryForward: carryForward,
             income: income,
             spent: spent,
-            accountsTotal: accountsTotal,
           ),
 
           const SizedBox(height: 6),
@@ -349,58 +343,261 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
+Widget _monthNavButton({
+  required IconData icon,
+  required VoidCallback? onTap,
+  bool disabled = false,
+}) {
+  return Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: disabled ? Colors.grey.shade100 : Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: disabled ? Colors.grey.shade200 : Colors.grey.shade300,
+          ),
+          boxShadow: disabled
+              ? []
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+        ),
+        child: Icon(
+          icon,
+          size: 22,
+          color: disabled ? Colors.grey.shade400 : Colors.black87,
+        ),
+      ),
+    ),
+  );
+}
+
   /// Slim month strip (all tabs) — less vertical padding under the app bar.
   Widget _buildMonthNavigator(ThemeData theme) {
-    final monthStyle = theme.textTheme.titleMedium?.copyWith(
-      fontWeight: FontWeight.w800,
-      fontSize: 15,
-      letterSpacing: -0.3,
-    );
-    final btnStyle = IconButton.styleFrom(
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      minimumSize: const Size(36, 34),
-      padding: EdgeInsets.zero,
-      visualDensity: VisualDensity.compact,
-    );
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+  final isCurrent = _isCurrentMonth;
+
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          IconButton(
-            style: btnStyle,
-            icon: const Icon(Icons.chevron_left_rounded, size: 22),
-            onPressed: () => _changeMonth(-1),
+          // LEFT BUTTON
+          _monthNavButton(
+            icon: Icons.chevron_left_rounded,
+            onTap: () => _changeMonth(-1),
           ),
-          Text(
-            DateFormat('MMMM yyyy').format(_selectedMonth),
-            style: monthStyle,
-          ),
-          IconButton(
-            style: btnStyle,
-            icon: Icon(
-              Icons.chevron_right_rounded,
-              size: 22,
-              color: _isCurrentMonth ? Colors.grey.shade300 : null,
+
+          // MONTH TEXT (CENTER FOCUS)
+          Expanded(
+            child: Column(
+              children: [
+                Text(
+                  DateFormat('MMMM yyyy').format(_selectedMonth),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  isCurrent ? 'Current month' : 'Tap arrows to change',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.grey.shade500,
+                  ),
+                ),
+              ],
             ),
-            onPressed: _isCurrentMonth ? null : () => _changeMonth(1),
+          ),
+
+          // RIGHT BUTTON
+          _monthNavButton(
+            icon: Icons.chevron_right_rounded,
+            onTap: isCurrent ? null : () => _changeMonth(1),
+            disabled: isCurrent,
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
+
+Widget _buildUnifiedSummaryCard({
+  required double carryForward,
+  required double income,
+  required double spent,
+}) {
+  final currentBalance = carryForward + income - spent;
+  final isCurrent = _isCurrentMonth;
+
+  return Padding(
+    padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+    child: Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.green.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          /// 🔹 MONTH NAVIGATION INSIDE CARD
+          Row(
+            children: [
+              _monthNavButton(
+                icon: Icons.chevron_left_rounded,
+                onTap: () => _changeMonth(-1),
+              ),
+
+              Expanded(
+                child: Center(
+                  child: Text(
+                    DateFormat('MMMM yyyy').format(_selectedMonth),
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.green.shade900,
+                        letterSpacing: -0.2,
+                      ),
+                  ),
+                ),
+              ),
+
+              _monthNavButton(
+                icon: Icons.chevron_right_rounded,
+                onTap: isCurrent ? null : () => _changeMonth(1),
+                disabled: isCurrent,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 8),
+
+          /// 🔹 BALANCE
+          Text(
+            'Current balance',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade600,
+              letterSpacing: 0.2,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '₹ ${formatRupeesTwoDecimalsFromDouble(currentBalance)}',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: currentBalance >= 0
+                  ? Colors.green.shade800
+                  : Colors.red.shade700,
+              height: 1.05,
+            ),
+          ),
+
+          /// 🔹 CARRY FORWARD
+          if (carryForward != 0) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Includes carry forward ₹ ${formatRupeesTwoDecimalsFromDouble(carryForward)}',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
+
+          Divider(color: Colors.green.shade200, height: 18),
+
+          /// 🔹 INCOME
+          _summaryRow(
+            label: 'Total income',
+            amount: income,
+            icon: Icons.south_west_rounded,
+            color: const Color(0xFF2563EB),
+          ),
+          const SizedBox(height: 6),
+
+          /// 🔹 EXPENSE
+          _summaryRow(
+            label: 'Total expense',
+            amount: spent,
+            icon: Icons.north_east_rounded,
+            color: const Color(0xFFDC2626),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Widget _summaryRow({
+  required String label,
+  required double amount,
+  required IconData icon,
+  required Color color,
+}) {
+  return Row(
+    children: [
+      Container(
+        padding: const EdgeInsets.all(5),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: Icon(icon, size: 15, color: color),
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey.shade800,
+          ),
+        ),
+      ),
+      Text(
+        '₹ ${formatRupeesTwoDecimalsFromDouble(amount)}',
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
+    ],
+  );
+}
+  
   Widget _buildSummaryCards({
     required double carryForward,
     required double income,
