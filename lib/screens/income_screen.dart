@@ -28,6 +28,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
   late String _currentMonth;
   late DateTime _selectedDate;
   double _currentTotal = 0;
+  double _monthExpense = 0;
   double _carryForward = 0;
   List<IncomeEntry> _history = [];
   List<Expense> _receivedExpenses = [];
@@ -68,11 +69,13 @@ class _IncomeScreenState extends State<IncomeScreen> {
         received.fold<int>(0, (s, e) => s + e.amount);
     final receivedTotal = rupeesFromPaisa(receivedPaisa);
     final carry = await DatabaseHelper().getCarryForwardForMonth(_currentMonth);
+    final spent = expenseProvider.totalSpentForMonth(_currentMonth);
     if (!mounted) return;
     await context.read<AccountProvider>().refresh();
     if (mounted) {
       setState(() {
         _currentTotal = provider.monthlyIncome + receivedTotal;
+        _monthExpense = spent;
         _carryForward = carry;
         _history = history;
         _receivedExpenses = received;
@@ -193,6 +196,45 @@ class _IncomeScreenState extends State<IncomeScreen> {
         behavior: SnackBarBehavior.floating,
         backgroundColor: Colors.red.shade400,
       ),
+    );
+  }
+
+  Widget _incomeSummaryRow({
+    required String label,
+    required double amount,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(7),
+          ),
+          child: Icon(icon, size: 15, color: color),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade800,
+            ),
+          ),
+        ),
+        Text(
+          '₹ ${formatRupeesTwoDecimalsFromDouble(amount)}',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: color,
+          ),
+        ),
+      ],
     );
   }
 
@@ -387,6 +429,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
         DateTime.tryParse('$_currentMonth-01') ?? DateTime.now();
     final displayMonth = DateFormat('MMMM yyyy').format(monthAnchor);
     final mergedHistory = _mergedHistory();
+    final currentBalance = _carryForward + _currentTotal - _monthExpense;
 
     return Scaffold(
       appBar: AppBar(
@@ -405,87 +448,76 @@ class _IncomeScreenState extends State<IncomeScreen> {
                 children: [
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                     decoration: BoxDecoration(
                       color: Colors.green.shade50,
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.green.shade200),
                     ),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            Icon(Icons.account_balance_wallet,
-                                color: Colors.green.shade700, size: 24),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    displayMonth,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: Colors.green.shade700,
-                                    ),
-                                  ),
-                                  Text(
-                                    '₹ ${formatRupeesTwoDecimalsFromDouble(_currentTotal)}',
-                                    style: TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.green.shade800,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                            Icon(Icons.calendar_month_rounded,
+                                color: Colors.green.shade700, size: 17),
+                            const SizedBox(width: 6),
                             Text(
-                              'Added',
+                              displayMonth,
                               style: TextStyle(
                                 fontSize: 13,
-                                color: Colors.green.shade600,
-                                fontWeight: FontWeight.w500,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.green.shade800,
                               ),
                             ),
                           ],
                         ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Current balance',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade600,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '₹ ${formatRupeesTwoDecimalsFromDouble(currentBalance)}',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: currentBalance >= 0
+                                ? Colors.green.shade800
+                                : Colors.red.shade700,
+                            height: 1.05,
+                          ),
+                        ),
                         if (_carryForward != 0) ...[
-                          Divider(color: Colors.green.shade200, height: 20),
-                          Row(
-                            children: [
-                              Icon(
-                                _carryForward >= 0
-                                    ? Icons.trending_up
-                                    : Icons.trending_down,
-                                color: _carryForward >= 0
-                                    ? Colors.teal.shade600
-                                    : Colors.orange.shade700,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  'Carry forward from previous month',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey.shade700,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                '₹ ${formatRupeesTwoDecimalsFromDouble(_carryForward)}',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                  color: _carryForward >= 0
-                                      ? Colors.teal.shade700
-                                      : Colors.orange.shade700,
-                                ),
-                              ),
-                            ],
+                          const SizedBox(height: 4),
+                          Text(
+                            'Includes carry forward ₹ ${formatRupeesTwoDecimalsFromDouble(_carryForward)}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey.shade600,
+                            ),
                           ),
                         ],
+                        Divider(color: Colors.green.shade200, height: 18),
+                        _incomeSummaryRow(
+                          label: 'Total income',
+                          amount: _currentTotal,
+                          icon: Icons.south_west_rounded,
+                          color: const Color(0xFF2563EB),
+                        ),
+                        const SizedBox(height: 6),
+                        _incomeSummaryRow(
+                          label: 'Total expense',
+                          amount: _monthExpense,
+                          icon: Icons.north_east_rounded,
+                          color: const Color(0xFFDC2626),
+                        ),
                       ],
                     ),
                   ),
