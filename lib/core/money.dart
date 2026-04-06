@@ -51,19 +51,49 @@ int backupAmountToPaisa(Map<String, dynamic> map) {
   return amountPaisaFromMap(map['amount']);
 }
 
-/// `2.30` style (always two fractional digits), no currency prefix.
+/// Indian grouping: last 3 digits, then pairs (e.g. 212524 → 2,12,524).
+String _formatIndianIntegerString(String digits) {
+  var s = digits;
+  var neg = false;
+  if (s.startsWith('-')) {
+    neg = true;
+    s = s.substring(1);
+  }
+  s = s.replaceFirst(RegExp(r'^0+(?=\d)'), '');
+  if (s.isEmpty) s = '0';
+
+  if (s.length <= 3) {
+    return neg ? '-$s' : s;
+  }
+
+  final parts = <String>[];
+  var end = s.length;
+  var start = end - 3;
+  parts.add(s.substring(start, end));
+  end = start;
+  while (end > 0) {
+    start = end > 2 ? end - 2 : 0;
+    parts.insert(0, s.substring(start, end));
+    end = start;
+  }
+  final out = parts.join(',');
+  return neg ? '-$out' : out;
+}
+
+/// `2,12,524.24` style (Indian commas, always two fractional digits), no currency prefix.
 String formatRupeesFixed2FromPaisa(int paisa) {
   final neg = paisa < 0;
   final a = neg ? -paisa : paisa;
   final ru = a ~/ kPaisaPerRupee;
   final frac = a % kPaisaPerRupee;
   final sign = neg ? '-' : '';
-  return '$sign$ru.${frac.toString().padLeft(2, '0')}';
+  final intStr = _formatIndianIntegerString('$ru');
+  return '$sign$intStr.${frac.toString().padLeft(2, '0')}';
 }
 
-/// UI aggregates already in rupees (`double`) → same two-decimal string (half-up to paisa).
-String formatRupeesTwoDecimalsFromDouble(double rupees) {
-  return formatRupeesFixed2FromPaisa(paisaFromRupeeDouble(rupees));
+/// UI aggregates already in rupees (`double`) → same two-decimal string with Indian grouping.
+String formatRupeesTwoDecimalsFromDouble(double value) {
+  return formatRupeesFixed2FromPaisa(paisaFromRupeeDouble(value));
 }
 
 /// Text field when editing an amount stored as paisa.
