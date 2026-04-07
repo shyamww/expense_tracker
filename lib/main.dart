@@ -78,29 +78,26 @@ class ExpenseTrackerApp extends StatelessWidget {
             ),
           ),
         ),
-        home: const _AppRoot(),
-      ),
-    );
-  }
-}
-
-class _AppRoot extends StatelessWidget {
-  const _AppRoot();
-
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<AppLockProvider>(
-      builder: (context, lock, _) {
-        if (!lock.isReady) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+        builder: (context, child) {
+          return Consumer<AppLockProvider>(
+            builder: (context, lock, _) {
+              if (!lock.isReady) {
+                return const Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                );
+              }
+              return Stack(
+                children: [
+                  child!,
+                  if (lock.shouldShowLock)
+                    const LockScreen(),
+                ],
+              );
+            },
           );
-        }
-        if (lock.shouldShowLock) {
-          return const LockScreen();
-        }
-        return const HomeScreen();
-      },
+        },
+        home: const HomeScreen(),
+      ),
     );
   }
 }

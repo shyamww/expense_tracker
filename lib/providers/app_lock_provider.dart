@@ -59,9 +59,17 @@ class AppLockProvider extends ChangeNotifier with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (kIsWeb || !_lockEnabled) return;
-    if (state == AppLifecycleState.paused) {
-      _locked = true;
-      notifyListeners();
+    
+    // We lock when the app is no longer fully active.
+    // 'inactive' covers the app switcher and some overlays.
+    // 'hidden' (Flutter 3.13+) and 'paused' cover the app being fully in background.
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      if (!_locked) {
+        _locked = true;
+        notifyListeners();
+      }
     }
   }
 

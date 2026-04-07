@@ -38,7 +38,7 @@ class _LockScreenState extends State<LockScreen> {
   }
 
   Future<void> _submitPin() async {
-    if (_pin.length != 4) return;
+    if (_pin.length != 4 || _busy) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -64,6 +64,14 @@ class _LockScreenState extends State<LockScreen> {
       _error = null;
       _pin += digit;
     });
+    if (_pin.length == 4) {
+      // 🕒 Delay briefly so the user sees the last bubble fill before we transition.
+      Future.delayed(const Duration(milliseconds: 150), () {
+        if (mounted && _pin.length == 4) {
+          _submitPin();
+        }
+      });
+    }
   }
 
   void _onBackspace() {
