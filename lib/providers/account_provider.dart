@@ -22,12 +22,14 @@ class AccountProvider extends ChangeNotifier {
         _balancesByAccount[accountName] ?? 0,
       );
 
-  Future<void> refresh() async {
+  Future<void> refresh({bool notify = true}) async {
     _accounts = await _db.getAccounts();
     _cumulativeBalance = await _db.getCumulativeAccountBalance();
     _balancesByAccount = await _db.getPerAccountBalances();
-    notifyListeners();
+    if (notify) notifyListeners();
   }
+
+  void forceNotify() => notifyListeners();
 
   Future<void> addAccount(AppAccount draft) async {
     final name = draft.name.trim();

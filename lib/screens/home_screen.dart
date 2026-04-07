@@ -46,6 +46,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   final Set<String> _collapsedDates = {};
   int? _selectedExpenseId;
   AppNavigationHub? _navHub;
+  bool _isInitialized = false;
 
   @override
   void initState() {
@@ -80,15 +81,19 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     super.dispose();
   }
 
-  /// Same month + income reload as double-tapping a tab (e.g. Daily).
-  void _jumpToCurrentMonth() {
+  Future<void> _jumpToCurrentMonth() async {
     final now = DateTime.now();
+    final clamped = DateTime(now.year, now.month);
+    final monthKey = DateFormat('yyyy-MM').format(clamped);
+    
+    final incomeProvider = context.read<IncomeProvider>();
+    await incomeProvider.loadIncomeForMonth(monthKey, notify: false);
+
+    if (!mounted) return;
     setState(() {
-      _selectedMonth = DateTime(now.year, now.month);
+      _selectedMonth = clamped;
     });
-    context.read<IncomeProvider>().loadIncomeForMonth(
-      DateFormat('yyyy-MM').format(_selectedMonth),
-    );
+    incomeProvider.forceNotify();
   }
 
   void _onTabDoubleTap(int index) {
@@ -115,10 +120,27 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final incomeProvider = context.read<IncomeProvider>();
     final categoryProvider = context.read<CategoryProvider>();
     final accountProvider = context.read<AccountProvider>();
-    await expenseProvider.loadExpenses();
-    await incomeProvider.loadIncomeForCurrentMonth();
-    await categoryProvider.loadCategories();
-    await accountProvider.refresh();
+    
+    await Future.wait([
+      expenseProvider.loadExpenses(notify: false),
+      incomeProvider.loadIncomeForCurrentMonth(notify: false),
+      categoryProvider.loadCategories(notify: false),
+      accountProvider.refresh(notify: false),
+    ]);
+
+    if (!mounted) return;
+
+    // Trigger UI updates only once all data is fully loaded
+    expenseProvider.forceNotify();
+    incomeProvider.forceNotify();
+    categoryProvider.forceNotify();
+    accountProvider.forceNotify();
+
+    if (!_isInitialized) {
+      setState(() {
+        _isInitialized = true;
+      });
+    }
   }
 
   bool get _isCurrentMonth {
@@ -136,13 +158,15 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     if (_selectedMonth.year == clamped.year && _selectedMonth.month == clamped.month) {
       return;
     }
-    setState(() => _selectedMonth = clamped);
+    
     final monthKey = DateFormat('yyyy-MM').format(clamped);
-    // Load income after this frame so PageView / month swipe isn’t fighting DB + notifyListeners on the same frame.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      context.read<IncomeProvider>().loadIncomeForMonth(monthKey);
-    });
+    final incomeProvider = context.read<IncomeProvider>();
+    
+    await incomeProvider.loadIncomeForMonth(monthKey, notify: false);
+
+    if (!mounted) return;
+    setState(() => _selectedMonth = clamped);
+    incomeProvider.forceNotify();
   }
 
   Future<void> _changeMonth(int delta) async {
@@ -172,10 +196,17 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final accountProvider = context.watch<AccountProvider>();
     final theme = Theme.of(context);
 
+    if (!_isInitialized) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final spent = expenseProvider.totalSpentForMonth(_monthPrefix);
     final received = expenseProvider.totalReceivedForMonth(_monthPrefix);
     final carryForward = incomeProvider.carryForward;
     final income = incomeProvider.monthlyIncome + received;
+
     final accountsTotal = accountProvider.cumulativeBalance;
 
     return Scaffold(
@@ -453,7 +484,10 @@ Widget _buildUnifiedSummaryCard({
   required double income,
   required double spent,
 }) {
-  final currentBalance = carryForward + income - spent;
+  final currentBalance =
+    ((carryForward + income - spent).isFinite
+        ? carryForward + income - spent
+        : 0.0).toDouble();
   final isCurrent = _isCurrentMonth;
 
   return Padding(

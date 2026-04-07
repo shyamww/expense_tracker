@@ -24,20 +24,22 @@ class IncomeProvider extends ChangeNotifier {
     _allIncomeHistory = await _dbHelper.getAllIncomeHistory();
   }
 
-  Future<void> loadIncomeForCurrentMonth() async {
+  Future<void> loadIncomeForCurrentMonth({bool notify = true}) async {
     final month = DateFormat('yyyy-MM').format(DateTime.now());
     _currentIncome = await _dbHelper.getIncomeForMonth(month);
     _carryForward = await _dbHelper.getCarryForwardForMonth(month);
     await loadAllIncomeHistory();
-    notifyListeners();
+    if (notify) notifyListeners();
   }
 
-  Future<void> loadIncomeForMonth(String month) async {
+  Future<void> loadIncomeForMonth(String month, {bool notify = true}) async {
     _currentIncome = await _dbHelper.getIncomeForMonth(month);
     _carryForward = await _dbHelper.getCarryForwardForMonth(month);
     await loadAllIncomeHistory();
-    notifyListeners();
+    if (notify) notifyListeners();
   }
+
+  void forceNotify() => notifyListeners();
 
   Future<void> setIncome(
     int amountPaisa,

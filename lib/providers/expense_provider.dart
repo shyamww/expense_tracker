@@ -34,15 +34,17 @@ class ExpenseProvider extends ChangeNotifier {
     return rupeesFromPaisa(paisa);
   }
 
-  Future<void> loadExpenses() async {
+  Future<void> loadExpenses({bool notify = true}) async {
     _expenses = await _dbHelper.getAllExpenses();
-    notifyListeners();
+    if (notify) notifyListeners();
   }
 
-  Future<void> loadExpensesForMonth(String month) async {
+  Future<void> loadExpensesForMonth(String month, {bool notify = true}) async {
     _expenses = await _dbHelper.getExpensesByMonth(month);
-    notifyListeners();
+    if (notify) notifyListeners();
   }
+
+  void forceNotify() => notifyListeners();
 
   Future<void> addExpense(Expense expense) async {
     await _dbHelper.insertExpense(expense);

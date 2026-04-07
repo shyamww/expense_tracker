@@ -24,10 +24,12 @@ class CategoryProvider extends ChangeNotifier {
   static bool countsAsReportSpending(String c) =>
       ReportingCategoryNames.countsAsSpendingInReports(c);
 
-  Future<void> loadCategories() async {
+  Future<void> loadCategories({bool notify = true}) async {
     _categories = await _db.getExpenseCategories();
-    notifyListeners();
+    if (notify) notifyListeners();
   }
+
+  void forceNotify() => notifyListeners();
 
   CategoryInfo resolveVisual(String name) {
     for (final c in _categories) {
