@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../constants/categories.dart';
+import '../constants/reporting_category_names.dart';
 import '../db/database_helper.dart';
 import '../models/expense_category.dart';
 
@@ -13,7 +14,15 @@ class CategoryProvider extends ChangeNotifier {
   List<ExpenseCategory> _categories = [];
   List<ExpenseCategory> get categories => List.unmodifiable(_categories);
 
-  static const String kReceivedCategoryName = 'Received';
+  static const String kReceivedCategoryName = ReportingCategoryNames.received;
+  static const String kTransferOutCategoryName = ReportingCategoryNames.transferOut;
+  static const String kTransferInCategoryName = ReportingCategoryNames.transferIn;
+
+  static bool isTransferCategory(String c) =>
+      ReportingCategoryNames.isTransferCategory(c);
+
+  static bool countsAsReportSpending(String c) =>
+      ReportingCategoryNames.countsAsSpendingInReports(c);
 
   Future<void> loadCategories() async {
     _categories = await _db.getExpenseCategories();

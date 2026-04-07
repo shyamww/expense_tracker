@@ -11,7 +11,9 @@ List<ExpenseCategory> buildSeededExpenseCategories() {
         iconCodePoint: c.icon.codePoint,
         colorValue: encodeMaterialColor(c.color),
         sortOrder: order++,
-        systemLocked: c.name == 'Received',
+        systemLocked: c.name == 'Received' ||
+            c.name == 'To Self' ||
+            c.name == 'To Self (in)',
       ),
   ];
 }

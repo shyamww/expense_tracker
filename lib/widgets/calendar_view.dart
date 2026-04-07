@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../constants/reporting_category_names.dart';
 import '../core/money.dart';
 import '../models/expense.dart';
 import '../models/income_entry.dart';
@@ -188,9 +189,9 @@ class _CalendarViewState extends State<CalendarView> {
     for (final e in widget.expenses) {
       if (!e.date.startsWith(monthPrefix)) continue;
       final current = raw[e.date] ?? (spent: 0, received: 0);
-      if (e.category == 'Received') {
+      if (ReportingCategoryNames.countsAsExternalReceived(e.category)) {
         raw[e.date] = (spent: current.spent, received: current.received + e.amount);
-      } else {
+      } else if (ReportingCategoryNames.countsAsSpendingInReports(e.category)) {
         raw[e.date] = (spent: current.spent + e.amount, received: current.received);
       }
     }

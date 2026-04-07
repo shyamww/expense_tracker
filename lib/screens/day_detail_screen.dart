@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../constants/reporting_category_names.dart';
 import '../core/money.dart';
 import '../providers/expense_provider.dart';
 import '../providers/income_provider.dart';
@@ -73,10 +74,10 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     final spentPaisa = dayExpenses
-        .where((e) => e.category != 'Received')
+        .where((e) => ReportingCategoryNames.countsAsSpendingInReports(e.category))
         .fold<int>(0, (sum, e) => sum + e.amount);
     final receivedFromExpPaisa = dayExpenses
-        .where((e) => e.category == 'Received')
+        .where((e) => ReportingCategoryNames.countsAsExternalReceived(e.category))
         .fold<int>(0, (sum, e) => sum + e.amount);
     final incomeEntriesPaisa =
         dayIncome.fold<int>(0, (sum, e) => sum + e.amount);

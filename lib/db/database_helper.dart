@@ -11,6 +11,8 @@ import '../models/account_ledger_day.dart';
 import '../data/category_seed_data.dart';
 import '../data/account_seed_data.dart';
 import '../core/money.dart';
+import '../core/transfer_note.dart';
+import '../constants/reporting_category_names.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -38,7 +40,7 @@ class DatabaseHelper {
     final path = p.join(dbPath, 'expense_tracker.db');
     _database = await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -145,6 +147,9 @@ class DatabaseHelper {
     }
     if (oldVersion < 5) {
       await _migrateAmountColumnsToPaisa(db);
+    }
+    if (oldVersion < 6) {
+      await _insertSeedExpenseCategories(db);
     }
   }
 
@@ -270,6 +275,21 @@ class DatabaseHelper {
             'sort_order': c.sortOrder,
             'system_locked': c.systemLocked ? 1 : 0,
           });
+        }
+      } else {
+        final names =
+            _webExpenseCategories.map((m) => m['name'] as String).toSet();
+        for (final c in buildSeededExpenseCategories()) {
+          if (names.contains(c.name)) continue;
+          _webExpenseCategories.add({
+            'id': _nextCategoryId++,
+            'name': c.name,
+            'icon_code_point': c.iconCodePoint,
+            'color': c.colorValue,
+            'sort_order': c.sortOrder,
+            'system_locked': c.systemLocked ? 1 : 0,
+          });
+          names.add(c.name);
         }
       }
       final sorted = List<Map<String, dynamic>>.from(_webExpenseCategories)
@@ -558,8 +578,7 @@ class DatabaseHelper {
     await db.delete('accounts', where: 'id = ?', whereArgs: [id]);
   }
 
-  /// Sum of all account balances: income credits and "Received" expenses credit;
-  /// other expenses debit. Only rows with a non-empty [Expense.account] / [IncomeEntry.account] count.
+  /// Sum of all account balances: income credits; Received + transfer-in credit; other expenses debit.
   Future<double> getCumulativeAccountBalance() async {
     if (kIsWeb) {
       var totalPaisa = 0;
@@ -568,7 +587,7 @@ class DatabaseHelper {
         if (acct.isEmpty) continue;
         final amt = amountPaisaFromMap(e['amount']);
         final cat = e['category'] as String? ?? '';
-        if (cat == 'Received') {
+        if (ReportingCategoryNames.creditsExpenseAccountBalance(cat)) {
           totalPaisa += amt;
         } else {
           totalPaisa -= amt;
@@ -583,7 +602,7 @@ class DatabaseHelper {
     }
     final db = await _getDb();
     final exp = await db.rawQuery('''
-      SELECT COALESCE(SUM(CASE WHEN category = 'Received' THEN amount ELSE -amount END), 0) AS t
+      SELECT COALESCE(SUM(${ReportingCategoryNames.sqlExpenseBalanceCase}), 0) AS t
       FROM expenses
       WHERE IFNULL(account, '') != ''
     ''');
@@ -606,7 +625,8 @@ class DatabaseHelper {
         if (acct.isEmpty) continue;
         final amt = amountPaisaFromMap(e['amount']);
         final cat = e['category'] as String? ?? '';
-        final delta = cat == 'Received' ? amt : -amt;
+        final delta =
+            ReportingCategoryNames.creditsExpenseAccountBalance(cat) ? amt : -amt;
         balances[acct] = (balances[acct] ?? 0) + delta;
       }
       for (final h in _webIncomeHistory) {
@@ -620,7 +640,7 @@ class DatabaseHelper {
     final db = await _getDb();
     final exp = await db.rawQuery('''
       SELECT account,
-        COALESCE(SUM(CASE WHEN category = 'Received' THEN amount ELSE -amount END), 0) AS t
+        COALESCE(SUM(${ReportingCategoryNames.sqlExpenseBalanceCase}), 0) AS t
       FROM expenses
       WHERE IFNULL(account, '') != ''
       GROUP BY account
@@ -712,6 +732,20 @@ class DatabaseHelper {
     return maps.map((m) => Expense.fromMap(m)).toList();
   }
 
+  Future<Expense?> getExpenseById(int id) async {
+    if (kIsWeb) {
+      for (final row in _webExpenses) {
+        if (row['id'] == id) return Expense.fromMap(row);
+      }
+      return null;
+    }
+    final db = await _getDb();
+    final maps =
+        await db.query('expenses', where: 'id = ?', whereArgs: [id], limit: 1);
+    if (maps.isEmpty) return null;
+    return Expense.fromMap(maps.first);
+  }
+
   Future<int> updateExpense(Expense expense) async {
     if (kIsWeb) {
       final index = _webExpenses.indexWhere((m) => m['id'] == expense.id);
@@ -727,12 +761,31 @@ class DatabaseHelper {
   }
 
   Future<int> deleteExpense(int id) async {
+    final existing = await getExpenseById(id);
+    final prefix = existing != null
+        ? parseTransferNotePrefix(existing.note)
+        : null;
+
     if (kIsWeb) {
-      final len = _webExpenses.length;
-      _webExpenses.removeWhere((m) => m['id'] == id);
-      return len - _webExpenses.length;
+      final before = _webExpenses.length;
+      if (prefix != null) {
+        _webExpenses.removeWhere(
+          (m) =>
+              (m['note'] as String? ?? '').startsWith(prefix),
+        );
+      } else {
+        _webExpenses.removeWhere((m) => m['id'] == id);
+      }
+      return before - _webExpenses.length;
     }
     final db = await _getDb();
+    if (prefix != null) {
+      return await db.delete(
+        'expenses',
+        where: 'note LIKE ?',
+        whereArgs: ['$prefix%'],
+      );
+    }
     return await db.delete('expenses', where: 'id = ?', whereArgs: [id]);
   }
 
@@ -958,9 +1011,10 @@ class DatabaseHelper {
       for (final e in _webExpenses) {
         if ((e['date'] as String).compareTo(firstDay) < 0) {
           final amt = amountPaisaFromMap(e['amount']);
-          if (e['category'] == 'Received') {
+          final cat = e['category'] as String? ?? '';
+          if (ReportingCategoryNames.countsAsExternalReceived(cat)) {
             totalReceivedPaisa += amt;
-          } else {
+          } else if (ReportingCategoryNames.countsAsSpendingInReports(cat)) {
             totalSpentPaisa += amt;
           }
         }
@@ -974,7 +1028,7 @@ class DatabaseHelper {
       totalIncomePaisa = (incomeResult.first['total'] as num).toInt();
 
       final spentResult = await db.rawQuery(
-        "SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE date < ? AND category != 'Received'",
+        'SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE date < ? AND ${ReportingCategoryNames.sqlExcludedFromSpentTotals}',
         [firstDay],
       );
       totalSpentPaisa = (spentResult.first['total'] as num).toInt();
@@ -1009,7 +1063,8 @@ class DatabaseHelper {
         if ((e['account'] as String? ?? '') != account) continue;
         if ((e['date'] as String).compareTo(firstDay) >= 0) continue;
         final amt = amountPaisaFromMap(e['amount']);
-        if (e['category'] == 'Received') {
+        if (ReportingCategoryNames.creditsExpenseAccountBalance(
+            e['category'] as String? ?? '')) {
           fromExpensesPaisa += amt;
         } else {
           fromExpensesPaisa -= amt;
@@ -1024,7 +1079,7 @@ class DatabaseHelper {
       fromIncomeHistoryPaisa = (inc.first['t'] as num).toInt();
       final exp = await db.rawQuery(
         '''
-        SELECT COALESCE(SUM(CASE WHEN category = 'Received' THEN amount ELSE -amount END), 0) AS t
+        SELECT COALESCE(SUM(${ReportingCategoryNames.sqlExpenseBalanceCase}), 0) AS t
         FROM expenses WHERE account = ? AND date < ?
         ''',
         [account, firstDay],
@@ -1074,11 +1129,12 @@ class DatabaseHelper {
 
     var monthSpentPaisa = 0;
     var monthIncomePaisa = 0;
+
     for (final e in monthExpenses) {
-      if (e.category == 'Received') {
-        monthIncomePaisa += e.amount;
+      if (ReportingCategoryNames.creditsExpenseAccountBalance(e.category)) {
+        monthIncomePaisa += e.amount; // money coming IN
       } else {
-        monthSpentPaisa += e.amount;
+        monthSpentPaisa += e.amount;  // money going OUT
       }
     }
     for (final h in monthIncomeRows) {

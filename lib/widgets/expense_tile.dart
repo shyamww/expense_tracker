@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../core/money.dart';
+import '../core/transfer_note.dart';
 import '../models/expense.dart';
 import '../providers/category_provider.dart';
 
@@ -74,7 +75,7 @@ class ExpenseTile extends StatelessWidget {
                       ),
                       if (expense.note.isNotEmpty)
                         Text(
-                          expense.note,
+                          displayExpenseNote(expense.note),
                           style: TextStyle(
                             color: Colors.grey.shade600,
                             fontSize: 13,

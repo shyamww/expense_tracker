@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../constants/reporting_category_names.dart';
 import '../core/money.dart';
 import '../db/database_helper.dart';
 import '../models/account_ledger_day.dart';
@@ -560,6 +561,16 @@ class _AccountDaySection extends StatelessWidget {
     required this.onIncomeDeselect,
   });
 
+  bool isSpending(String category) {
+  return ReportingCategoryNames.countsAsSpendingInReports(category) ||
+         category == ReportingCategoryNames.transferOut;
+}
+
+bool isReceived(String category) {
+  return ReportingCategoryNames.countsAsExternalReceived(category) ||
+         category == ReportingCategoryNames.transferIn;
+}
+
   @override
   Widget build(BuildContext context) {
     final date = DateTime.tryParse(day.date);
@@ -567,13 +578,26 @@ class _AccountDaySection extends StatelessWidget {
         ? DateFormat('dd MMM, EEEE').format(date)
         : day.date;
 
+    
+    bool isAccountExpense(String c) {
+        return ReportingCategoryNames.countsAsSpendingInReports(c) ||
+              c == ReportingCategoryNames.transferOut;
+      }
+
+      bool isAccountIncome(String c) {
+        return ReportingCategoryNames.countsAsExternalReceived(c) ||
+              c == ReportingCategoryNames.transferIn;
+      }
+
     final spentPaisa = day.expenses
-        .where((e) => e.category != 'Received')
-        .fold<int>(0, (s, e) => s + e.amount);
-    final receivedPaisa = day.expenses
-            .where((e) => e.category == 'Received')
-            .fold<int>(0, (s, e) => s + e.amount) +
-        day.incomeEntries.fold<int>(0, (s, e) => s + e.amount);
+    .where((e) => isAccountExpense(e.category))
+    .fold<int>(0, (s, e) => s + e.amount);
+
+final receivedPaisa = day.expenses
+        .where((e) => isAccountIncome(e.category))
+        .fold<int>(0, (s, e) => s + e.amount) +
+    day.incomeEntries.fold<int>(0, (s, e) => s + e.amount);
+
     final daySpent = rupeesFromPaisa(spentPaisa);
     final dayReceived = rupeesFromPaisa(receivedPaisa);
 

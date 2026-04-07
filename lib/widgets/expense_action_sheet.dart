@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/money.dart';
+import '../core/transfer_note.dart';
 import '../models/expense.dart';
+import '../providers/category_provider.dart';
 import '../providers/expense_provider.dart';
 import '../screens/add_expense_screen.dart';
 
@@ -35,7 +37,7 @@ Future<void> showExpenseActionsBottomSheet({
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
                   child: Text(
-                    expense.note,
+                    displayExpenseNote(expense.note),
                     style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -48,32 +50,38 @@ Future<void> showExpenseActionsBottomSheet({
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.grey.shade800),
                 ),
               ),
-              ListTile(
-                leading: Icon(Icons.edit_outlined, color: Colors.deepPurple.shade600),
-                title: const Text('Modify'),
-                onTap: () async {
-                  Navigator.pop(sheetCtx);
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => AddExpenseScreen(
-                        expenseToEdit: expense,
-                        lockAccountTo: lockAccountTo,
+              if (!CategoryProvider.isTransferCategory(expense.category))
+                ListTile(
+                  leading: Icon(Icons.edit_outlined, color: Colors.deepPurple.shade600),
+                  title: const Text('Modify'),
+                  onTap: () async {
+                    Navigator.pop(sheetCtx);
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AddExpenseScreen(
+                          expenseToEdit: expense,
+                          lockAccountTo: lockAccountTo,
+                        ),
                       ),
-                    ),
-                  );
-                },
-              ),
+                    );
+                  },
+                ),
               ListTile(
                 leading: Icon(Icons.delete_outline, color: Colors.red.shade600),
                 title: Text('Delete', style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w600)),
                 onTap: () async {
                   Navigator.pop(sheetCtx);
+                  final isXfer = CategoryProvider.isTransferCategory(expense.category);
                   final confirmed = await showDialog<bool>(
                     context: context,
                     builder: (dCtx) => AlertDialog(
                       title: const Text('Delete entry?'),
-                      content: const Text('This cannot be undone.'),
+                      content: Text(
+                        isXfer
+                            ? 'Both sides of this transfer will be removed. This cannot be undone.'
+                            : 'This cannot be undone.',
+                      ),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(dCtx, false),

@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
+import '../constants/reporting_category_names.dart';
 import '../core/money.dart';
+import '../core/transfer_note.dart';
 import '../db/database_helper.dart';
 import '../models/expense.dart';
 
@@ -14,7 +16,9 @@ class ExpenseProvider extends ChangeNotifier {
     final now = DateTime.now();
     final monthPrefix = DateFormat('yyyy-MM').format(now);
     final paisa = _expenses
-        .where((e) => e.date.startsWith(monthPrefix) && e.category != 'Received')
+        .where((e) =>
+            e.date.startsWith(monthPrefix) &&
+            ReportingCategoryNames.countsAsSpendingInReports(e.category))
         .fold<int>(0, (sum, e) => sum + e.amount);
     return rupeesFromPaisa(paisa);
   }
@@ -23,7 +27,9 @@ class ExpenseProvider extends ChangeNotifier {
     final now = DateTime.now();
     final monthPrefix = DateFormat('yyyy-MM').format(now);
     final paisa = _expenses
-        .where((e) => e.date.startsWith(monthPrefix) && e.category == 'Received')
+        .where((e) =>
+            e.date.startsWith(monthPrefix) &&
+            ReportingCategoryNames.countsAsExternalReceived(e.category))
         .fold<int>(0, (sum, e) => sum + e.amount);
     return rupeesFromPaisa(paisa);
   }
@@ -40,6 +46,39 @@ class ExpenseProvider extends ChangeNotifier {
 
   Future<void> addExpense(Expense expense) async {
     await _dbHelper.insertExpense(expense);
+    await loadExpenses();
+  }
+
+  /// Internal account-to-account move: excluded from income/expense reports; both legs share a note prefix for paired delete.
+  Future<void> addInternalTransfer({
+    required int amountPaisa,
+    required String fromAccount,
+    required String toAccount,
+    required String dateYmd,
+    required String createdAtIso,
+    String userNote = '',
+  }) async {
+    if (fromAccount == toAccount) return;
+    final prefix = makeTransferNotePrefix();
+    final extra = userNote.trim().isEmpty ? '' : ' · ${userNote.trim()}';
+    final outNote = '$prefix → $toAccount$extra';
+    final inNote = '$prefix ← $fromAccount$extra';
+    await _dbHelper.insertExpense(Expense(
+      amount: amountPaisa,
+      category: ReportingCategoryNames.transferOut,
+      account: fromAccount,
+      note: outNote,
+      date: dateYmd,
+      createdAt: createdAtIso,
+    ));
+    await _dbHelper.insertExpense(Expense(
+      amount: amountPaisa,
+      category: ReportingCategoryNames.transferIn,
+      account: toAccount,
+      note: inNote,
+      date: dateYmd,
+      createdAt: createdAtIso,
+    ));
     await loadExpenses();
   }
 
@@ -70,14 +109,18 @@ class ExpenseProvider extends ChangeNotifier {
 
   double totalSpentForMonth(String monthPrefix) {
     final paisa = _expenses
-        .where((e) => e.date.startsWith(monthPrefix) && e.category != 'Received')
+        .where((e) =>
+            e.date.startsWith(monthPrefix) &&
+            ReportingCategoryNames.countsAsSpendingInReports(e.category))
         .fold<int>(0, (sum, e) => sum + e.amount);
     return rupeesFromPaisa(paisa);
   }
 
   double totalReceivedForMonth(String monthPrefix) {
     final paisa = _expenses
-        .where((e) => e.date.startsWith(monthPrefix) && e.category == 'Received')
+        .where((e) =>
+            e.date.startsWith(monthPrefix) &&
+            ReportingCategoryNames.countsAsExternalReceived(e.category))
         .fold<int>(0, (sum, e) => sum + e.amount);
     return rupeesFromPaisa(paisa);
   }
@@ -106,9 +149,9 @@ class ExpenseProvider extends ChangeNotifier {
     for (final e in _expenses) {
       if (!e.date.startsWith(monthPrefix)) continue;
       final current = raw[e.date] ?? (spent: 0, received: 0);
-      if (e.category == 'Received') {
+      if (ReportingCategoryNames.countsAsExternalReceived(e.category)) {
         raw[e.date] = (spent: current.spent, received: current.received + e.amount);
-      } else {
+      } else if (ReportingCategoryNames.countsAsSpendingInReports(e.category)) {
         raw[e.date] = (spent: current.spent + e.amount, received: current.received);
       }
     }
@@ -131,9 +174,9 @@ class ExpenseProvider extends ChangeNotifier {
       var receivedPaisa = 0;
       for (final e in yearExpenses) {
         if (e.date.startsWith(monthKey)) {
-          if (e.category == 'Received') {
+          if (ReportingCategoryNames.countsAsExternalReceived(e.category)) {
             receivedPaisa += e.amount;
-          } else {
+          } else if (ReportingCategoryNames.countsAsSpendingInReports(e.category)) {
             spentPaisa += e.amount;
           }
         }

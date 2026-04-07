@@ -27,6 +27,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   String? _selectedCategory;
   String? _selectedAccount;
   late DateTime _selectedDateTime;
+  bool _transferMode = false;
+  String? _transferFrom;
+  String? _transferTo;
 
   bool get _isEditing => widget.expenseToEdit != null;
 
@@ -133,6 +136,39 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       return;
     }
 
+    var when = _selectedDateTime;
+    final now = DateTime.now();
+    if (when.isAfter(now)) when = now;
+
+    final provider = context.read<ExpenseProvider>();
+    final accountProvider = context.read<AccountProvider>();
+
+    if (!_isEditing && _transferMode && !_accountLocked) {
+      final from = _transferFrom;
+      final to = _transferTo;
+      if (from == null ||
+          to == null ||
+          from.isEmpty ||
+          to.isEmpty ||
+          from == to) {
+        _showError('Choose two different accounts');
+        return;
+      }
+      await provider.addInternalTransfer(
+        amountPaisa: amountPaisa,
+        fromAccount: from,
+        toAccount: to,
+        dateYmd: DateFormat('yyyy-MM-dd').format(when),
+        createdAtIso: when.toIso8601String(),
+        userNote: _noteController.text.trim(),
+      );
+      if (!mounted) return;
+      await accountProvider.refresh();
+      if (!mounted) return;
+      Navigator.pop(context);
+      return;
+    }
+
     if (_selectedCategory == null) {
       _showError('Please select a category');
       return;
@@ -146,10 +182,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       return;
     }
 
-    var when = _selectedDateTime;
-    final now = DateTime.now();
-    if (when.isAfter(now)) when = now;
-
     final expense = Expense(
       id: widget.expenseToEdit?.id,
       amount: amountPaisa,
@@ -160,8 +192,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       createdAt: when.toIso8601String(),
     );
 
-    final provider = context.read<ExpenseProvider>();
-    final accountProvider = context.read<AccountProvider>();
     if (_isEditing) {
       await provider.updateExpense(expense);
     } else {
@@ -186,6 +216,39 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isEditing &&
+        widget.expenseToEdit != null &&
+        CategoryProvider.isTransferCategory(widget.expenseToEdit!.category)) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Transfer'),
+          centerTitle: true,
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Transfers cannot be edited. Delete the entry from your list — '
+                'both the sending and receiving sides are removed together.',
+                style: TextStyle(
+                  fontSize: 16,
+                  height: 1.45,
+                  color: Colors.grey.shade800,
+                ),
+              ),
+              const SizedBox(height: 28),
+              FilledButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEditing ? 'Edit expense' : 'Add Expense'),
@@ -196,7 +259,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Amount Field
             Text(
               'Amount',
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -226,43 +288,66 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
             const SizedBox(height: 24),
 
-            // Category Selector
-            Text(
-              'Category',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-            const SizedBox(height: 10),
-            Consumer<CategoryProvider>(
-              builder: (context, cat, _) {
-                if (cat.categories.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 20),
-                    child: Center(
-                      child: Text(
-                        'Loading categories…',
-                        style: TextStyle(color: Colors.grey.shade600),
-                      ),
+            if (!_transferMode) ...[
+              Text(
+                'Category',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
                     ),
-                  );
-                }
-                return Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: cat.categories.map((c) {
-                    final info = c.toCategoryInfo();
-                    return CategoryChip(
-                      category: info,
-                      selected: _selectedCategory == c.name,
-                      onTap: () => setState(() => _selectedCategory = c.name),
+              ),
+              const SizedBox(height: 10),
+              Consumer<CategoryProvider>(
+                builder: (context, cat, _) {
+                  if (cat.categories.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 20),
+                      child: Center(
+                        child: Text(
+                          'Loading categories…',
+                          style: TextStyle(color: Colors.grey.shade600),
+                        ),
+                      ),
                     );
-                  }).toList(),
-                );
-              },
-            ),
-
-            const SizedBox(height: 24),
+                  }
+                  final visible = cat.categories
+                      .where((c) => !CategoryProvider.isTransferCategory(c.name))
+                      .toList();
+                  return Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: visible.map((c) {
+                      final info = c.toCategoryInfo();
+                      return CategoryChip(
+                        category: info,
+                        selected: _selectedCategory == c.name,
+                        onTap: () => setState(() => _selectedCategory = c.name),
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+              const SizedBox(height: 24),
+            ] else ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.deepPurple.shade50,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.deepPurple.shade100),
+                ),
+                child: Text(
+                  'Moving money between your own accounts. '
+                  'This does not count as income or expense in reports.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.35,
+                    color: Colors.deepPurple.shade900,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
 
             if (_accountLocked) ...[
               Text(
@@ -300,23 +385,123 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       ),
                     );
                   }
-                  return Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: ap.accounts.map((a) {
-                      return AccountChip(
-                        name: a.name,
-                        selected: _selectedAccount == a.name,
-                        onTap: () => setState(() => _selectedAccount = a.name),
-                      );
-                    }).toList(),
+                  if (ap.accounts.length < 2) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Add at least two accounts to use To Self transfers.',
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: ap.accounts.map((a) {
+                            return AccountChip(
+                              name: a.name,
+                              selected: _selectedAccount == a.name,
+                              onTap: () => setState(() {
+                                _transferMode = false;
+                                _selectedAccount = a.name;
+                              }),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    );
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: [
+                          AccountChip(
+                            name: 'To Self',
+                            selected: _transferMode,
+                            onTap: () {
+                              setState(() {
+                                _transferMode = true;
+                                _selectedAccount = null;
+                                _transferFrom = ap.accounts[0].name;
+                                _transferTo = ap.accounts[1].name;
+                              });
+                            },
+                          ),
+                          ...ap.accounts.map((a) {
+                            return AccountChip(
+                              name: a.name,
+                              selected: !_transferMode && _selectedAccount == a.name,
+                              onTap: () => setState(() {
+                                _transferMode = false;
+                                _selectedAccount = a.name;
+                              }),
+                            );
+                          }),
+                        ],
+                      ),
+                      if (_transferMode) ...[
+                        const SizedBox(height: 18),
+                        Text(
+                          'From account',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: ap.accounts.map((a) {
+                            return AccountChip(
+                              name: a.name,
+                              selected: _transferFrom == a.name,
+                              onTap: () => setState(() {
+                                _transferFrom = a.name;
+                                if (_transferTo == a.name) {
+                                  _transferTo = ap.accounts
+                                      .firstWhere((x) => x.name != a.name)
+                                      .name;
+                                }
+                              }),
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          'To account',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: ap.accounts.map((a) {
+                            final disabled = a.name == _transferFrom;
+                            return Opacity(
+                              opacity: disabled ? 0.4 : 1,
+                              child: AccountChip(
+                                name: a.name,
+                                selected: _transferTo == a.name,
+                                onTap: disabled
+                                    ? () {}
+                                    : () => setState(() => _transferTo = a.name),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ],
                   );
                 },
               ),
               const SizedBox(height: 24),
             ],
 
-            // Date & time
             Text(
               'Date & time',
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -376,7 +561,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
             const SizedBox(height: 24),
 
-            // Note Field
             Text(
               'Note (optional)',
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -388,7 +572,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               controller: _noteController,
               textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
-                hintText: 'e.g., Lunch with friends',
+                hintText: _transferMode
+                    ? 'e.g., Move to savings'
+                    : 'e.g., Lunch with friends',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -399,7 +585,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
             const SizedBox(height: 32),
 
-            // Save Button
             SizedBox(
               width: double.infinity,
               height: 52,
@@ -411,7 +596,11 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   ),
                 ),
                 child: Text(
-                  _isEditing ? 'Save changes' : 'Save Expense',
+                  _isEditing
+                      ? 'Save changes'
+                      : _transferMode
+                          ? 'Save transfer'
+                          : 'Save Expense',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
               ),

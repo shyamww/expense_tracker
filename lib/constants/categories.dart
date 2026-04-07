@@ -53,6 +53,16 @@ const List<CategoryInfo> defaultCategoryInfos = [
     icon: Icons.arrow_downward,
     color: Color(0xFF26C6DA),
   ),
+  CategoryInfo(
+    name: 'To Self',
+    icon: Icons.swap_horiz_rounded,
+    color: Color(0xFF7C4DFF),
+  ),
+  CategoryInfo(
+    name: 'To Self (in)',
+    icon: Icons.call_received_rounded,
+    color: Color(0xFF00ACC1),
+  ),
 ];
 
 /// Fallback styling for expense strings that are not in the user’s category list.

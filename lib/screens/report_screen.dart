@@ -5,6 +5,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../core/money.dart';
 import '../providers/expense_provider.dart';
 import '../models/expense.dart';
+import '../constants/reporting_category_names.dart';
 import '../providers/category_provider.dart';
 
 class ReportScreen extends StatefulWidget {
@@ -54,9 +55,8 @@ class _ReportScreenState extends State<ReportScreen> {
 
     final expenses = await provider.getExpensesByDateRange(from, to);
 
-    // 🔥 Remove "Received"
     final spendingExpenses = expenses
-        .where((e) => e.category != CategoryProvider.kReceivedCategoryName)
+        .where((e) => ReportingCategoryNames.countsAsSpendingInReports(e.category))
         .toList();
 
     final totals = provider.getCategoryTotals(spendingExpenses);

@@ -8,6 +8,7 @@ import '../providers/expense_provider.dart';
 import '../models/expense.dart';
 import '../models/income_entry.dart';
 import '../providers/income_provider.dart';
+import '../constants/reporting_category_names.dart';
 import '../providers/category_provider.dart';
 import '../providers/account_provider.dart';
 import '../providers/app_navigation_hub.dart';
@@ -716,10 +717,10 @@ Widget _summaryRow({
         final dayIncome = incomeByDay[dateStr] ?? [];
         final isCollapsed = _collapsedDates.contains(dateStr);
         final dayTotalPaisa = dayExpenses
-            .where((e) => e.category != 'Received')
+            .where((e) => ReportingCategoryNames.countsAsSpendingInReports(e.category))
             .fold<int>(0, (sum, e) => sum + e.amount);
         final dayReceivedPaisa = dayExpenses
-                .where((e) => e.category == 'Received')
+                .where((e) => ReportingCategoryNames.countsAsExternalReceived(e.category))
                 .fold<int>(0, (sum, e) => sum + e.amount) +
             dayIncome.fold<int>(0, (sum, e) => sum + e.amount);
         final dayTotal = rupeesFromPaisa(dayTotalPaisa);
