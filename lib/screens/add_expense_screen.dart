@@ -286,6 +286,97 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               ),
             ),
 
+            const SizedBox(height: 8),
+          Text(
+            'Note (optional)',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _noteController,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              hintText: _transferMode
+                  ? 'e.g., Move to savings'
+                  : 'e.g., Lunch with friends',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            ),
+          ),
+
+        Text(
+              'Date & time',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(height: 8),
+
+        Row(
+              children: [
+                // DATE
+                Expanded(
+                  child: InkWell(
+                    onTap: _pickDate,
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade400),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.calendar_today,
+                              size: 18, color: Colors.grey.shade600),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              DateFormat('dd MMM yyyy').format(_selectedDateTime),
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 10),
+
+                // TIME
+                Expanded(
+                  child: InkWell(
+                    onTap: _pickTime,
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade400),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.schedule,
+                              size: 18, color: Colors.grey.shade600),
+                          const SizedBox(width: 8),
+                          Text(
+                            DateFormat('hh:mm a').format(_selectedDateTime),
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
             const SizedBox(height: 24),
 
             if (!_transferMode) ...[
@@ -502,86 +593,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               const SizedBox(height: 24),
             ],
 
-            Text(
-              'Date & time',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            InkWell(
-              onTap: _pickDate,
-              borderRadius: BorderRadius.circular(14),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade400),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.calendar_today,
-                        size: 20, color: Colors.grey.shade600),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        DateFormat('dd MMMM yyyy').format(_selectedDateTime),
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            InkWell(
-              onTap: _pickTime,
-              borderRadius: BorderRadius.circular(14),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade400),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.schedule,
-                        size: 20, color: Colors.grey.shade600),
-                    const SizedBox(width: 12),
-                    Text(
-                      DateFormat('hh:mm a').format(_selectedDateTime),
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            Text(
-              'Note (optional)',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _noteController,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: InputDecoration(
-                hintText: _transferMode
-                    ? 'e.g., Move to savings'
-                    : 'e.g., Lunch with friends',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              ),
-            ),
 
             const SizedBox(height: 32),
 
