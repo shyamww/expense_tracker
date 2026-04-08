@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants/categories.dart';
+import '../constants/category_picker_presets.dart';
 
 /// Icon for categories created from unknown expense strings (DB / import).
 const int kUnknownCategoryIconCodePoint = 0xe892; // label_outline
@@ -21,8 +22,12 @@ class ExpenseCategory {
     this.systemLocked = false,
   });
 
-  IconData get iconData =>
-      IconData(iconCodePoint, fontFamily: 'MaterialIcons');
+  IconData get iconData {
+    for (final ic in kAllKnownCategoryIcons) {
+      if (ic.codePoint == iconCodePoint) return ic;
+    }
+    return Icons.label_outline_rounded;
+  }
 
   CategoryInfo toCategoryInfo() => CategoryInfo(
         name: name,

@@ -21,6 +21,21 @@ const List<IconData> kCategoryPickerIcons = [
   Icons.label_outline_rounded,
 ];
 
+/// Every [IconData] that may be stored as `icon_code_point` in the DB (picker +
+/// seeded defaults that use non-`..._rounded` variants). Used so release builds
+/// can tree-shake the icon font without non-constant [IconData] construction.
+const List<IconData> kAllKnownCategoryIcons = <IconData>[
+  ...kCategoryPickerIcons,
+  Icons.restaurant,
+  Icons.checkroom,
+  Icons.directions_car,
+  Icons.arrow_upward,
+  Icons.trending_up,
+  Icons.arrow_downward,
+  Icons.swap_horiz_rounded,
+  Icons.call_received_rounded,
+];
+
 const List<Color> kCategoryPickerColors = [
   Color(0xFFEF5350),
   Color(0xFFAB47BC),
