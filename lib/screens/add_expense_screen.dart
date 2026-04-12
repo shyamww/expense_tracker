@@ -72,9 +72,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       final ap = context.read<AccountProvider>();
       await ap.refresh();
       if (!mounted) return;
-      if (!_accountLocked && _selectedAccount == null && ap.accounts.isNotEmpty) {
-        setState(() => _selectedAccount = ap.accounts.first.name);
-      }
     });
   }
 
