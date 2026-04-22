@@ -171,9 +171,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       return;
     }
 
-    final accountName = _accountLocked
-        ? widget.lockAccountTo!.trim()
-        : _selectedAccount;
+    final accountName =
+        _accountLocked ? widget.lockAccountTo!.trim() : _selectedAccount;
     if (accountName == null || accountName.isEmpty) {
       _showError('Please select an account');
       return;
@@ -279,42 +278,40 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
             ),
-
-            const SizedBox(height: 8),
-          Text(
-            'Note (optional)',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w600,
+            const SizedBox(height: 6),
+            Text(
+              'Note (optional)',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(height: 6),
+            TextField(
+              controller: _noteController,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: InputDecoration(
+                hintText: _transferMode
+                    ? 'e.g., Move to savings'
+                    : 'e.g., Lunch with friends',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
                 ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _noteController,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: InputDecoration(
-              hintText: _transferMode
-                  ? 'e.g., Move to savings'
-                  : 'e.g., Lunch with friends',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               ),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             ),
-          ),
-
-        Text(
+            const SizedBox(height: 10),
+            Text(
               'Date & time',
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
             ),
-            const SizedBox(height: 8),
-
-        Row(
+            const SizedBox(height: 6),
+            Row(
               children: [
                 // DATE
                 Expanded(
@@ -322,7 +319,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     onTap: _pickDate,
                     borderRadius: BorderRadius.circular(14),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
                       decoration: BoxDecoration(
                         border: Border.all(color: Colors.grey.shade400),
                         borderRadius: BorderRadius.circular(14),
@@ -334,7 +332,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              DateFormat('dd MMM yyyy').format(_selectedDateTime),
+                              DateFormat('dd MMM yyyy')
+                                  .format(_selectedDateTime),
                               style: const TextStyle(fontSize: 14),
                             ),
                           ),
@@ -352,7 +351,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     onTap: _pickTime,
                     borderRadius: BorderRadius.circular(14),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
                       decoration: BoxDecoration(
                         border: Border.all(color: Colors.grey.shade400),
                         borderRadius: BorderRadius.circular(14),
@@ -373,9 +373,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 ),
               ],
             ),
-
-            const SizedBox(height: 24),
-
+            const SizedBox(height: 16),
             if (!_transferMode) ...[
               Text(
                 'Category',
@@ -383,7 +381,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       fontWeight: FontWeight.w600,
                     ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Consumer<CategoryProvider>(
                 builder: (context, cat, _) {
                   if (cat.categories.isEmpty) {
@@ -398,15 +396,17 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     );
                   }
                   final visible = cat.categories
-                      .where((c) => !CategoryProvider.isTransferCategory(c.name))
+                      .where(
+                          (c) => !CategoryProvider.isTransferCategory(c.name))
                       .toList();
                   return Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
+                    spacing: 8,
+                    runSpacing: 8,
                     children: visible.map((c) {
                       final info = c.toCategoryInfo();
                       return CategoryChip(
                         category: info,
+                        compact: true,
                         selected: _selectedCategory == c.name,
                         onTap: () => setState(() => _selectedCategory = c.name),
                       );
@@ -414,7 +414,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   );
                 },
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
             ] else ...[
               Container(
                 width: double.infinity,
@@ -434,9 +434,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
             ],
-
             if (_accountLocked) ...[
               Text(
                 'Account',
@@ -453,7 +452,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   color: Colors.grey.shade800,
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
             ] else ...[
               Text(
                 'Account',
@@ -461,7 +460,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       fontWeight: FontWeight.w600,
                     ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Consumer<AccountProvider>(
                 builder: (context, ap, _) {
                   if (ap.accounts.isEmpty) {
@@ -469,7 +468,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       child: Text(
                         'Add an account in Settings → Accounts.',
-                        style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                        style: TextStyle(
+                            color: Colors.grey.shade600, fontSize: 14),
                       ),
                     );
                   }
@@ -479,15 +479,17 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       children: [
                         Text(
                           'Add at least two accounts to use To Self transfers.',
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                          style: TextStyle(
+                              color: Colors.grey.shade600, fontSize: 14),
                         ),
                         const SizedBox(height: 12),
                         Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
+                          spacing: 8,
+                          runSpacing: 8,
                           children: ap.accounts.map((a) {
                             return AccountChip(
                               name: a.name,
+                              compact: true,
                               selected: _selectedAccount == a.name,
                               onTap: () => setState(() {
                                 _transferMode = false;
@@ -503,11 +505,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
                           AccountChip(
                             name: 'To Self',
+                            compact: true,
                             selected: _transferMode,
                             onTap: () {
                               setState(() {
@@ -521,7 +524,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                           ...ap.accounts.map((a) {
                             return AccountChip(
                               name: a.name,
-                              selected: !_transferMode && _selectedAccount == a.name,
+                              compact: true,
+                              selected:
+                                  !_transferMode && _selectedAccount == a.name,
                               onTap: () => setState(() {
                                 _transferMode = false;
                                 _selectedAccount = a.name;
@@ -531,20 +536,22 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                         ],
                       ),
                       if (_transferMode) ...[
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 12),
                         Text(
                           'From account',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
+                          spacing: 8,
+                          runSpacing: 8,
                           children: ap.accounts.map((a) {
                             return AccountChip(
                               name: a.name,
+                              compact: true,
                               selected: _transferFrom == a.name,
                               onTap: () => setState(() {
                                 _transferFrom = a.name;
@@ -557,27 +564,30 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                             );
                           }).toList(),
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 10),
                         Text(
                           'To account',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.titleSmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
+                          spacing: 8,
+                          runSpacing: 8,
                           children: ap.accounts.map((a) {
                             final disabled = a.name == _transferFrom;
                             return Opacity(
                               opacity: disabled ? 0.4 : 1,
                               child: AccountChip(
                                 name: a.name,
+                                compact: true,
                                 selected: _transferTo == a.name,
                                 onTap: disabled
                                     ? () {}
-                                    : () => setState(() => _transferTo = a.name),
+                                    : () =>
+                                        setState(() => _transferTo = a.name),
                               ),
                             );
                           }).toList(),
@@ -587,12 +597,9 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                   );
                 },
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
             ],
-
-
-            const SizedBox(height: 32),
-
+            const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
               height: 52,
@@ -609,7 +616,8 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                       : _transferMode
                           ? 'Save transfer'
                           : 'Save Expense',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w600),
                 ),
               ),
             ),

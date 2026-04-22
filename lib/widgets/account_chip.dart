@@ -5,28 +5,36 @@ class AccountChip extends StatelessWidget {
   final String name;
   final bool selected;
   final VoidCallback onTap;
+  final bool compact;
 
   const AccountChip({
     super.key,
     required this.name,
     required this.selected,
     required this.onTap,
+    this.compact = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
+    final horizontal = compact ? 10.0 : 14.0;
+    final vertical = compact ? 8.0 : 10.0;
+    final iconSize = compact ? 18.0 : 22.0;
+    final labelSize = compact ? 12.0 : 13.0;
+    final radius = compact ? 10.0 : 12.0;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding:
+            EdgeInsets.symmetric(horizontal: horizontal, vertical: vertical),
         decoration: BoxDecoration(
           color: selected
               ? scheme.primary.withValues(alpha: 0.12)
               : scheme.surface,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(radius),
           border: Border.all(
             color: selected ? scheme.primary : theme.dividerColor,
             width: selected ? 2 : 1,
@@ -38,13 +46,13 @@ class AccountChip extends StatelessWidget {
             Icon(
               Icons.account_balance_rounded,
               color: selected ? scheme.primary : scheme.onSurfaceVariant,
-              size: 22,
+              size: iconSize,
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: compact ? 6 : 8),
             Text(
               name,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: labelSize,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                 color: selected ? scheme.primary : scheme.onSurface,
               ),
