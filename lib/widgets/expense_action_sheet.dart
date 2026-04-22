@@ -7,17 +7,21 @@ import '../providers/category_provider.dart';
 import '../providers/expense_provider.dart';
 import '../screens/add_expense_screen.dart';
 
+enum ExpenseActionSheetResult { modify, delete }
+
 /// Long-press actions: modify or delete. [onClosed] runs when the sheet is dismissed.
-Future<void> showExpenseActionsBottomSheet({
+Future<bool> showExpenseActionsBottomSheet({
   required BuildContext context,
   required Expense expense,
+
   /// When set, edit screen keeps this account (e.g. from account ledger).
   String? lockAccountTo,
   VoidCallback? onClosed,
 }) async {
-  if (expense.id == null) return;
+  if (expense.id == null) return false;
+  var changed = false;
   try {
-    await showModalBottomSheet<void>(
+    final action = await showModalBottomSheet<ExpenseActionSheetResult>(
       context: context,
       showDragHandle: true,
       builder: (sheetCtx) {
@@ -30,7 +34,8 @@ Future<void> showExpenseActionsBottomSheet({
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
                 child: Text(
                   expense.category,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w800),
                 ),
               ),
               if (expense.note.isNotEmpty)
@@ -47,57 +52,29 @@ Future<void> showExpenseActionsBottomSheet({
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                 child: Text(
                   '₹${formatRupeesFixed2FromPaisa(expense.amount)}',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.grey.shade800),
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade800),
                 ),
               ),
               if (!CategoryProvider.isTransferCategory(expense.category))
                 ListTile(
-                  leading: Icon(Icons.edit_outlined, color: Colors.deepPurple.shade600),
+                  leading: Icon(Icons.edit_outlined,
+                      color: Colors.deepPurple.shade600),
                   title: const Text('Modify'),
-                  onTap: () async {
-                    Navigator.pop(sheetCtx);
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => AddExpenseScreen(
-                          expenseToEdit: expense,
-                          lockAccountTo: lockAccountTo,
-                        ),
-                      ),
-                    );
+                  onTap: () {
+                    Navigator.pop(sheetCtx, ExpenseActionSheetResult.modify);
                   },
                 ),
               ListTile(
                 leading: Icon(Icons.delete_outline, color: Colors.red.shade600),
-                title: Text('Delete', style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w600)),
-                onTap: () async {
-                  Navigator.pop(sheetCtx);
-                  final isXfer = CategoryProvider.isTransferCategory(expense.category);
-                  final confirmed = await showDialog<bool>(
-                    context: context,
-                    builder: (dCtx) => AlertDialog(
-                      title: const Text('Delete entry?'),
-                      content: Text(
-                        isXfer
-                            ? 'Both sides of this transfer will be removed. This cannot be undone.'
-                            : 'This cannot be undone.',
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(dCtx, false),
-                          child: const Text('Cancel'),
-                        ),
-                        FilledButton(
-                          onPressed: () => Navigator.pop(dCtx, true),
-                          style: FilledButton.styleFrom(backgroundColor: Colors.red.shade600),
-                          child: const Text('Delete'),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (confirmed == true && context.mounted) {
-                    await context.read<ExpenseProvider>().deleteExpense(expense.id!);
-                  }
+                title: Text('Delete',
+                    style: TextStyle(
+                        color: Colors.red.shade700,
+                        fontWeight: FontWeight.w600)),
+                onTap: () {
+                  Navigator.pop(sheetCtx, ExpenseActionSheetResult.delete);
                 },
               ),
               const SizedBox(height: 8),
@@ -106,7 +83,52 @@ Future<void> showExpenseActionsBottomSheet({
         );
       },
     );
+
+    if (!context.mounted) return changed;
+
+    if (action == ExpenseActionSheetResult.modify) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AddExpenseScreen(
+            expenseToEdit: expense,
+            lockAccountTo: lockAccountTo,
+          ),
+        ),
+      );
+      changed = true;
+    } else if (action == ExpenseActionSheetResult.delete) {
+      final isXfer = CategoryProvider.isTransferCategory(expense.category);
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dCtx) => AlertDialog(
+          title: const Text('Delete entry?'),
+          content: Text(
+            isXfer
+                ? 'Both sides of this transfer will be removed. This cannot be undone.'
+                : 'This cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dCtx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dCtx, true),
+              style:
+                  FilledButton.styleFrom(backgroundColor: Colors.red.shade600),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true && context.mounted) {
+        await context.read<ExpenseProvider>().deleteExpense(expense.id!);
+        changed = true;
+      }
+    }
   } finally {
     onClosed?.call();
   }
+  return changed;
 }
