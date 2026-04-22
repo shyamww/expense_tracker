@@ -20,6 +20,7 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
@@ -32,7 +33,7 @@ class SettingsScreen extends StatelessWidget {
           if (kIsWeb)
             ListTile(
               leading: Icon(Icons.notifications_off_outlined,
-                  color: Colors.grey.shade700),
+                  color: scheme.onSurfaceVariant),
               title: const Text('Daily reminder'),
               subtitle: const Text('Not available on web'),
             )
@@ -42,8 +43,8 @@ class SettingsScreen extends StatelessWidget {
           _SectionHeader(title: 'Privacy'),
           if (kIsWeb)
             ListTile(
-              leading:
-                  Icon(Icons.lock_outline_rounded, color: Colors.grey.shade700),
+              leading: Icon(Icons.lock_outline_rounded,
+                  color: scheme.onSurfaceVariant),
               title: const Text('App lock'),
               subtitle: const Text('Not available on web'),
             )
@@ -52,14 +53,15 @@ class SettingsScreen extends StatelessWidget {
           const Divider(height: 1),
           _SectionHeader(title: 'General'),
           ListTile(
-            leading:
-                Icon(Icons.info_outline_rounded, color: Colors.grey.shade700),
+            leading: Icon(Icons.info_outline_rounded,
+                color: scheme.onSurfaceVariant),
             title: const Text('App info'),
             subtitle: const Text('Version, developer, and details'),
             onTap: () => _showAppInfoDialog(context),
           ),
           ListTile(
-            leading: Icon(Icons.palette_outlined, color: Colors.grey.shade700),
+            leading:
+                Icon(Icons.palette_outlined, color: scheme.onSurfaceVariant),
             title: const Text('Appearance'),
             subtitle: const Text('Switch between light and dark mode'),
             onTap: () {
@@ -71,7 +73,8 @@ class SettingsScreen extends StatelessWidget {
             },
           ),
           ListTile(
-            leading: Icon(Icons.category_outlined, color: Colors.grey.shade700),
+            leading:
+                Icon(Icons.category_outlined, color: scheme.onSurfaceVariant),
             title: const Text('Categories'),
             subtitle: const Text('Add, edit, or delete expense categories'),
             onTap: () {
@@ -84,7 +87,7 @@ class SettingsScreen extends StatelessWidget {
           ),
           ListTile(
             leading: Icon(Icons.account_balance_outlined,
-                color: Colors.grey.shade700),
+                color: scheme.onSurfaceVariant),
             title: const Text('Accounts'),
             subtitle: const Text(
                 'Banks and cash — used when adding income or expenses'),
@@ -99,14 +102,15 @@ class SettingsScreen extends StatelessWidget {
           const Divider(height: 1),
           _SectionHeader(title: 'Data'),
           ListTile(
-            leading: Icon(Icons.folder_outlined, color: Colors.grey.shade700),
+            leading:
+                Icon(Icons.folder_outlined, color: scheme.onSurfaceVariant),
             title: const Text('Where your data lives'),
             subtitle: const Text(
               'Stored locally on this device. Use Backup to export or restore JSON.',
             ),
           ),
           ListTile(
-            leading: Icon(Icons.cloud_outlined, color: Colors.grey.shade700),
+            leading: Icon(Icons.cloud_outlined, color: scheme.onSurfaceVariant),
             title: const Text('Backup & restore'),
             subtitle: const Text('Export or import your data'),
             onTap: () async {
@@ -119,7 +123,8 @@ class SettingsScreen extends StatelessWidget {
           const Divider(height: 1),
           _SectionHeader(title: 'Support'),
           ListTile(
-            leading: Icon(Icons.feedback_outlined, color: Colors.grey.shade700),
+            leading:
+                Icon(Icons.feedback_outlined, color: scheme.onSurfaceVariant),
             title: const Text('Send feedback'),
             subtitle: const Text(
                 'Sent with Web3Forms — your inbox is not in the app'),
@@ -191,7 +196,7 @@ class SettingsScreen extends StatelessWidget {
                           Text(
                             'Personal expense & income',
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: Colors.grey.shade600,
+                              color: scheme.onSurfaceVariant,
                             ),
                           ),
                         ],
@@ -204,16 +209,16 @@ class SettingsScreen extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
+                    color: scheme.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.grey.shade200),
+                    border: Border.all(color: theme.dividerColor),
                   ),
                   child: Column(
                     children: [
                       _AppInfoRow(label: 'Version', value: _appVersion),
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Divider(height: 1, color: Colors.grey.shade200),
+                        child: Divider(height: 1, color: theme.dividerColor),
                       ),
                       _AppInfoRow(label: 'Developer', value: _developerName),
                     ],
@@ -223,7 +228,7 @@ class SettingsScreen extends StatelessWidget {
                 Text(
                   'Track income, expenses, and monthly balance. Your data stays on this device unless you export a backup from the Backup tab.',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: Colors.grey.shade700,
+                    color: scheme.onSurfaceVariant,
                     height: 1.45,
                   ),
                 ),
@@ -403,6 +408,7 @@ class _AppInfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -413,7 +419,7 @@ class _AppInfoRow extends StatelessWidget {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Colors.grey.shade600,
+              color: scheme.onSurfaceVariant,
             ),
           ),
         ),
@@ -485,6 +491,7 @@ class _DailyReminderSettingsState extends State<_DailyReminderSettings> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     if (_loading) {
       return ListTile(
         leading: SizedBox(
@@ -492,7 +499,7 @@ class _DailyReminderSettingsState extends State<_DailyReminderSettings> {
           height: 24,
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            color: Colors.grey.shade600,
+            color: scheme.onSurfaceVariant,
           ),
         ),
         title: const Text('Daily reminder'),
@@ -504,7 +511,7 @@ class _DailyReminderSettingsState extends State<_DailyReminderSettings> {
       children: [
         SwitchListTile(
           secondary: Icon(Icons.notifications_active_outlined,
-              color: Colors.grey.shade700),
+              color: scheme.onSurfaceVariant),
           title: const Text('Daily reminder'),
           subtitle: Text(
             _enabled
@@ -631,6 +638,7 @@ class _AppLockSettingsState extends State<_AppLockSettings> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     if (_loading) {
       return ListTile(
         leading: SizedBox(
@@ -638,7 +646,7 @@ class _AppLockSettingsState extends State<_AppLockSettings> {
           height: 24,
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            color: Colors.grey.shade600,
+            color: scheme.onSurfaceVariant,
           ),
         ),
         title: const Text('App lock'),
@@ -650,7 +658,7 @@ class _AppLockSettingsState extends State<_AppLockSettings> {
       children: [
         SwitchListTile(
           secondary:
-              Icon(Icons.lock_outline_rounded, color: Colors.grey.shade700),
+              Icon(Icons.lock_outline_rounded, color: scheme.onSurfaceVariant),
           title: const Text('App lock'),
           subtitle: const Text(
               '4-digit PIN when opening the app or returning from background'),
@@ -660,7 +668,7 @@ class _AppLockSettingsState extends State<_AppLockSettings> {
         if (_lockOn && _bioAvailable)
           SwitchListTile(
             secondary:
-                Icon(Icons.fingerprint_rounded, color: Colors.grey.shade700),
+                Icon(Icons.fingerprint_rounded, color: scheme.onSurfaceVariant),
             title: const Text('Face ID / fingerprint'),
             subtitle: const Text('Unlock with biometrics when available'),
             value: _bioOn,
@@ -674,7 +682,7 @@ class _AppLockSettingsState extends State<_AppLockSettings> {
           ),
         if (_lockOn)
           ListTile(
-            leading: Icon(Icons.pin_outlined, color: Colors.grey.shade700),
+            leading: Icon(Icons.pin_outlined, color: scheme.onSurfaceVariant),
             title: const Text('Change PIN'),
             onTap: _onChangePin,
           ),

@@ -10,7 +10,8 @@ class AccountManagementScreen extends StatefulWidget {
   const AccountManagementScreen({super.key});
 
   @override
-  State<AccountManagementScreen> createState() => _AccountManagementScreenState();
+  State<AccountManagementScreen> createState() =>
+      _AccountManagementScreenState();
 }
 
 class _AccountManagementScreenState extends State<AccountManagementScreen> {
@@ -24,6 +25,8 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Accounts'),
@@ -39,21 +42,22 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.account_balance_outlined, size: 56, color: Colors.grey.shade400),
+                    Icon(Icons.account_balance_outlined,
+                        size: 56, color: scheme.onSurfaceVariant),
                     const SizedBox(height: 16),
                     Text(
                       'No accounts yet',
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade800,
+                        color: scheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Tap Add to create a bank or cash account.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey.shade600),
+                      style: TextStyle(color: scheme.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -67,19 +71,22 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
             itemBuilder: (context, i) {
               final a = list[i];
               return Material(
-                color: Colors.white,
+                color: scheme.surface,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.grey.shade200),
+                  side: BorderSide(color: theme.dividerColor),
                 ),
                 child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                   leading: CircleAvatar(
-                    backgroundColor: Colors.indigo.shade50,
-                    child: Icon(Icons.account_balance_rounded, color: Colors.indigo.shade700, size: 22),
+                    backgroundColor: scheme.primaryContainer,
+                    child: Icon(Icons.account_balance_rounded,
+                        color: scheme.primary, size: 22),
                   ),
-                  title: Text(a.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  title: Text(a.name,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -89,7 +96,8 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                         onPressed: () => _openEditor(context, a),
                       ),
                       IconButton(
-                        icon: Icon(Icons.delete_outline, color: Colors.red.shade400),
+                        icon: Icon(Icons.delete_outline,
+                            color: Colors.red.shade400),
                         tooltip: 'Delete',
                         onPressed: () => _confirmDelete(context, a),
                       ),
@@ -161,11 +169,12 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: targetAccount,
+                    initialValue: targetAccount,
                     decoration: const InputDecoration(labelText: 'Move to'),
                     items: others
                         .map(
-                          (o) => DropdownMenuItem(value: o.name, child: Text(o.name)),
+                          (o) => DropdownMenuItem(
+                              value: o.name, child: Text(o.name)),
                         )
                         .toList(),
                     onChanged: (v) {
@@ -175,7 +184,9 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                 ],
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel')),
+                TextButton(
+                    onPressed: () => Navigator.pop(dCtx),
+                    child: const Text('Cancel')),
                 FilledButton(
                   onPressed: () => Navigator.pop(dCtx, targetAccount),
                   child: const Text('Delete'),
@@ -194,10 +205,13 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
           title: const Text('Delete account?'),
           content: Text('Remove "${a.name}"? This cannot be undone.'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('Cancel')),
+            TextButton(
+                onPressed: () => Navigator.pop(dCtx, false),
+                child: const Text('Cancel')),
             FilledButton(
               onPressed: () => Navigator.pop(dCtx, true),
-              style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+              style:
+                  FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
               child: const Text('Delete'),
             ),
           ],
@@ -281,7 +295,8 @@ class _AccountEditorSheetState extends State<_AccountEditorSheet> {
 
     try {
       if (_isEdit) {
-        await provider.updateAccount(draft, previousName: widget.existing!.name);
+        await provider.updateAccount(draft,
+            previousName: widget.existing!.name);
       } else {
         await provider.addAccount(draft);
       }
@@ -313,7 +328,8 @@ class _AccountEditorSheetState extends State<_AccountEditorSheet> {
   Widget build(BuildContext context) {
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
     return Padding(
-      padding: EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 16 + bottom),
+      padding:
+          EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 16 + bottom),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -321,7 +337,10 @@ class _AccountEditorSheetState extends State<_AccountEditorSheet> {
           children: [
             Text(
               _isEdit ? 'Edit account' : 'New account',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -330,7 +349,8 @@ class _AccountEditorSheetState extends State<_AccountEditorSheet> {
               decoration: InputDecoration(
                 labelText: 'Name',
                 hintText: 'e.g. HDFC Bank, Cash',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
             const SizedBox(height: 24),
@@ -338,7 +358,8 @@ class _AccountEditorSheetState extends State<_AccountEditorSheet> {
               onPressed: _save,
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
               child: Text(_isEdit ? 'Save changes' : 'Add account'),
             ),

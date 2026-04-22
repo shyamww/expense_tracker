@@ -23,14 +23,24 @@ class _BackupScreenState extends State<BackupScreen> {
 
   Future<void> _backup() async {
     setState(() => _isExporting = true);
+    final messenger = ScaffoldMessenger.of(context);
 
     try {
       final dbHelper = DatabaseHelper();
       final jsonString = await dbHelper.exportToJson();
 
+      if (!mounted) return;
       await platform.shareBackup(context, jsonString);
 
-      if (mounted) _showMessage('Backup created successfully!');
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: const Text('Backup created successfully!'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.green.shade400,
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) _showMessage('Backup failed: $e', isError: true);
     } finally {
@@ -39,6 +49,11 @@ class _BackupScreenState extends State<BackupScreen> {
   }
 
   Future<void> _restore() async {
+    final expenseProvider = context.read<ExpenseProvider>();
+    final incomeProvider = context.read<IncomeProvider>();
+    final categoryProvider = context.read<CategoryProvider>();
+    final accountProvider = context.read<AccountProvider>();
+    final messenger = ScaffoldMessenger.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -90,14 +105,23 @@ class _BackupScreenState extends State<BackupScreen> {
       final dbHelper = DatabaseHelper();
       await dbHelper.importFromJson(jsonString);
 
-      if (mounted) {
-        await context.read<ExpenseProvider>().loadExpenses();
-        await context.read<IncomeProvider>().loadIncomeForCurrentMonth();
-        await context.read<CategoryProvider>().loadCategories();
-        await context.read<AccountProvider>().refresh();
-        _showMessage('Data restored successfully!');
-        Navigator.pop(context);
-      }
+      if (!mounted) return;
+      await expenseProvider.loadExpenses();
+      if (!mounted) return;
+      await incomeProvider.loadIncomeForCurrentMonth();
+      if (!mounted) return;
+      await categoryProvider.loadCategories();
+      if (!mounted) return;
+      await accountProvider.refresh();
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: const Text('Data restored successfully!'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.green.shade400,
+        ),
+      );
+      Navigator.pop(context);
     } catch (e) {
       if (mounted) _showMessage('Restore failed: $e', isError: true);
     } finally {
@@ -118,6 +142,7 @@ class _BackupScreenState extends State<BackupScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return Scaffold(
       appBar: AppBar(
@@ -136,7 +161,8 @@ class _BackupScreenState extends State<BackupScreen> {
               decoration: BoxDecoration(
                 color: theme.colorScheme.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+                border: Border.all(
+                    color: theme.dividerColor.withValues(alpha: 0.4)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -146,7 +172,7 @@ class _BackupScreenState extends State<BackupScreen> {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
+                          color: Colors.blue.shade600.withValues(alpha: 0.14),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Icon(Icons.cloud_upload_outlined,
@@ -168,7 +194,7 @@ class _BackupScreenState extends State<BackupScreen> {
                               'Export all data as a file',
                               style: TextStyle(
                                 fontSize: 13,
-                                color: Colors.grey.shade600,
+                                color: scheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -181,7 +207,7 @@ class _BackupScreenState extends State<BackupScreen> {
                     'Creates a backup file that you can save to Files, Google Drive, iCloud, or share via any app.',
                     style: TextStyle(
                       fontSize: 13,
-                      color: Colors.grey.shade600,
+                      color: scheme.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -219,7 +245,8 @@ class _BackupScreenState extends State<BackupScreen> {
               decoration: BoxDecoration(
                 color: theme.colorScheme.surface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: theme.dividerColor.withOpacity(0.1)),
+                border: Border.all(
+                    color: theme.dividerColor.withValues(alpha: 0.4)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -229,7 +256,7 @@ class _BackupScreenState extends State<BackupScreen> {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: Colors.orange.shade50,
+                          color: Colors.orange.shade600.withValues(alpha: 0.14),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Icon(Icons.cloud_download_outlined,
@@ -251,7 +278,7 @@ class _BackupScreenState extends State<BackupScreen> {
                               'Import from a backup file',
                               style: TextStyle(
                                 fontSize: 13,
-                                color: Colors.grey.shade600,
+                                color: scheme.onSurfaceVariant,
                               ),
                             ),
                           ],
@@ -264,7 +291,7 @@ class _BackupScreenState extends State<BackupScreen> {
                     'Pick a previously exported backup file to restore all your expenses and income data.',
                     style: TextStyle(
                       fontSize: 13,
-                      color: Colors.grey.shade600,
+                      color: scheme.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -277,12 +304,11 @@ class _BackupScreenState extends State<BackupScreen> {
                           ? const SizedBox(
                               width: 18,
                               height: 18,
-                              child:
-                                  CircularProgressIndicator(strokeWidth: 2),
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.restore, size: 20),
-                      label:
-                          Text(_isImporting ? 'Restoring...' : 'Restore from File'),
+                      label: Text(
+                          _isImporting ? 'Restoring...' : 'Restore from File'),
                       style: OutlinedButton.styleFrom(
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
@@ -301,9 +327,10 @@ class _BackupScreenState extends State<BackupScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: Colors.amber.shade50,
+                color: Colors.amber.shade600.withValues(alpha: 0.14),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.amber.shade200),
+                border: Border.all(
+                    color: Colors.amber.shade600.withValues(alpha: 0.35)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,

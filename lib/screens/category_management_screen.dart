@@ -12,6 +12,8 @@ class CategoryManagementScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Categories'),
@@ -27,21 +29,22 @@ class CategoryManagementScreen extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.category_outlined, size: 56, color: Colors.grey.shade400),
+                    Icon(Icons.category_outlined,
+                        size: 56, color: scheme.onSurfaceVariant),
                     const SizedBox(height: 16),
                     Text(
                       'No categories yet',
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade800,
+                        color: scheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Tap Add to create one.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey.shade600),
+                      style: TextStyle(color: scheme.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -56,23 +59,26 @@ class CategoryManagementScreen extends StatelessWidget {
               final c = list[i];
               final info = c.toCategoryInfo();
               return Material(
-                color: Colors.white,
+                color: scheme.surface,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.grey.shade200),
+                  side: BorderSide(color: theme.dividerColor),
                 ),
                 child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                   leading: CircleAvatar(
                     backgroundColor: info.color.withValues(alpha: 0.15),
                     child: Icon(info.icon, color: info.color, size: 22),
                   ),
-                  title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  title: Text(c.name,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
                   subtitle: c.systemLocked
                       ? Text(
                           'Used for money received (keep name)',
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          style: TextStyle(
+                              fontSize: 12, color: scheme.onSurfaceVariant),
                         )
                       : null,
                   trailing: Row(
@@ -85,7 +91,8 @@ class CategoryManagementScreen extends StatelessWidget {
                       ),
                       if (!c.systemLocked)
                         IconButton(
-                          icon: Icon(Icons.delete_outline, color: Colors.red.shade400),
+                          icon: Icon(Icons.delete_outline,
+                              color: Colors.red.shade400),
                           tooltip: 'Delete',
                           onPressed: () => _confirmDelete(context, c),
                         ),
@@ -105,7 +112,8 @@ class CategoryManagementScreen extends StatelessWidget {
     );
   }
 
-  static Future<void> _openEditor(BuildContext context, ExpenseCategory? existing) async {
+  static Future<void> _openEditor(
+      BuildContext context, ExpenseCategory? existing) async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -117,7 +125,8 @@ class CategoryManagementScreen extends StatelessWidget {
     );
   }
 
-  static Future<void> _confirmDelete(BuildContext context, ExpenseCategory c) async {
+  static Future<void> _confirmDelete(
+      BuildContext context, ExpenseCategory c) async {
     final cat = context.read<CategoryProvider>();
     final count = await cat.expenseCountFor(c.name);
     if (!context.mounted) return;
@@ -128,7 +137,8 @@ class CategoryManagementScreen extends StatelessWidget {
       if (others.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Cannot delete: $count expense(s) and no other category to move them to.'),
+            content: Text(
+                'Cannot delete: $count expense(s) and no other category to move them to.'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -151,11 +161,12 @@ class CategoryManagementScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: targetCategory,
+                    initialValue: targetCategory,
                     decoration: const InputDecoration(labelText: 'Move to'),
                     items: others
                         .map(
-                          (o) => DropdownMenuItem(value: o.name, child: Text(o.name)),
+                          (o) => DropdownMenuItem(
+                              value: o.name, child: Text(o.name)),
                         )
                         .toList(),
                     onChanged: (v) {
@@ -165,7 +176,9 @@ class CategoryManagementScreen extends StatelessWidget {
                 ],
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel')),
+                TextButton(
+                    onPressed: () => Navigator.pop(dCtx),
+                    child: const Text('Cancel')),
                 FilledButton(
                   onPressed: () => Navigator.pop(dCtx, targetCategory),
                   child: const Text('Delete'),
@@ -184,10 +197,13 @@ class CategoryManagementScreen extends StatelessWidget {
           title: const Text('Delete category?'),
           content: Text('Remove "${c.name}"? This cannot be undone.'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('Cancel')),
+            TextButton(
+                onPressed: () => Navigator.pop(dCtx, false),
+                child: const Text('Cancel')),
             FilledButton(
               onPressed: () => Navigator.pop(dCtx, true),
-              style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+              style:
+                  FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
               child: const Text('Delete'),
             ),
           ],
@@ -196,17 +212,21 @@ class CategoryManagementScreen extends StatelessWidget {
       if (ok != true) return;
     }
 
+    if (!context.mounted) return;
+    final provider = context.read<CategoryProvider>();
+    final expenseProvider = context.read<ExpenseProvider>();
+    final messenger = ScaffoldMessenger.of(context);
     try {
-      await context.read<CategoryProvider>().deleteCategory(c, reassignTo: reassignTo);
-      if (context.mounted) {
-        await context.read<ExpenseProvider>().loadExpenses();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Deleted "${c.name}"'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      await provider.deleteCategory(c, reassignTo: reassignTo);
+      if (!context.mounted) return;
+      await expenseProvider.loadExpenses();
+      if (!context.mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('Deleted "${c.name}"'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } on StateError catch (e) {
       if (!context.mounted) return;
       final s = e.toString();
@@ -245,7 +265,8 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
     final e = widget.existing;
     _name = TextEditingController(text: e?.name ?? '');
     _iconCodePoint = e?.iconCodePoint ?? kCategoryPickerIcons.first.codePoint;
-    _colorValue = e?.colorValue ?? encodeMaterialColor(kCategoryPickerColors.first);
+    _colorValue =
+        e?.colorValue ?? encodeMaterialColor(kCategoryPickerColors.first);
   }
 
   @override
@@ -264,6 +285,8 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
     }
 
     final provider = context.read<CategoryProvider>();
+    final expenseProvider = context.read<ExpenseProvider>();
+    final messenger = ScaffoldMessenger.of(context);
     final draft = ExpenseCategory(
       id: widget.existing?.id,
       name: name,
@@ -275,20 +298,21 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
 
     try {
       if (_isEdit) {
-        await provider.updateCategory(draft, previousName: widget.existing!.name);
+        await provider.updateCategory(draft,
+            previousName: widget.existing!.name);
       } else {
         await provider.addCategory(draft);
       }
-      if (mounted) {
-        await context.read<ExpenseProvider>().loadExpenses();
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_isEdit ? 'Category updated' : 'Category added'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      if (!mounted) return;
+      await expenseProvider.loadExpenses();
+      if (!mounted) return;
+      Navigator.pop(context);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(_isEdit ? 'Category updated' : 'Category added'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } on StateError catch (e) {
       if (!mounted) return;
       final s = e.toString();
@@ -305,9 +329,12 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final bottom = MediaQuery.viewInsetsOf(context).bottom;
     return Padding(
-      padding: EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 16 + bottom),
+      padding:
+          EdgeInsets.only(left: 20, right: 20, top: 16, bottom: 16 + bottom),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -315,7 +342,10 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
           children: [
             Text(
               _isEdit ? 'Edit category' : 'New category',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -325,20 +355,24 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
               decoration: InputDecoration(
                 labelText: 'Name',
                 hintText: 'e.g. Subscriptions',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
             if (_nameLocked) ...[
               const SizedBox(height: 6),
               Text(
                 'Name is locked so income logic keeps working.',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
               ),
             ],
             const SizedBox(height: 18),
             Text(
               'Icon',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -353,13 +387,16 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: selected
-                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.12)
-                          : Colors.grey.shade100,
+                          ? Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withValues(alpha: 0.12)
+                          : scheme.surfaceContainerLow,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color: selected
                             ? Theme.of(context).colorScheme.primary
-                            : Colors.grey.shade300,
+                            : theme.dividerColor,
                         width: selected ? 2 : 1,
                       ),
                     ),
@@ -368,7 +405,7 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
                       size: 22,
                       color: selected
                           ? Theme.of(context).colorScheme.primary
-                          : Colors.grey.shade700,
+                          : scheme.onSurfaceVariant,
                     ),
                   ),
                 );
@@ -377,7 +414,10 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
             const SizedBox(height: 18),
             Text(
               'Color',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall
+                  ?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
             Wrap(
@@ -395,7 +435,7 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
                       color: col,
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: selected ? Colors.black87 : Colors.grey.shade300,
+                        color: selected ? scheme.onSurface : theme.dividerColor,
                         width: selected ? 3 : 1,
                       ),
                     ),
@@ -408,7 +448,8 @@ class _CategoryEditorSheetState extends State<_CategoryEditorSheet> {
               onPressed: _save,
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
               child: Text(_isEdit ? 'Save changes' : 'Add category'),
             ),
