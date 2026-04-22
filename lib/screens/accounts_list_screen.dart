@@ -24,8 +24,9 @@ class _AccountsListScreenState extends State<AccountsListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
         title: const Text('Accounts'),
         centerTitle: true,
@@ -40,21 +41,22 @@ class _AccountsListScreenState extends State<AccountsListScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.account_balance_outlined, size: 56, color: Colors.grey.shade400),
+                    Icon(Icons.account_balance_outlined,
+                        size: 56, color: scheme.onSurfaceVariant),
                     const SizedBox(height: 16),
                     Text(
                       'No accounts yet',
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade800,
+                        color: scheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Add accounts in Settings → Accounts.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey.shade600),
+                      style: TextStyle(color: scheme.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -71,17 +73,19 @@ class _AccountsListScreenState extends State<AccountsListScreen> {
               final balColor =
                   bal >= 0 ? const Color(0xFF059669) : const Color(0xFFDC2626);
               return Material(
-                color: Colors.white,
+                color: scheme.surface,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
-                  side: BorderSide(color: Colors.grey.shade200),
+                  side: BorderSide(color: theme.dividerColor),
                 ),
                 child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   leading: CircleAvatar(
-                    backgroundColor: Colors.indigo.shade50,
-                    child: Icon(Icons.account_balance_rounded, color: Colors.indigo.shade700),
+                    backgroundColor: scheme.primaryContainer,
+                    child: Icon(Icons.account_balance_rounded,
+                        color: scheme.primary),
                   ),
                   title: Row(
                     children: [
@@ -104,12 +108,14 @@ class _AccountsListScreenState extends State<AccountsListScreen> {
                       ),
                     ],
                   ),
-                  trailing: Icon(Icons.chevron_right_rounded, color: Colors.grey.shade400),
+                  trailing: Icon(Icons.chevron_right_rounded,
+                      color: scheme.onSurfaceVariant),
                   onTap: () async {
                     await Navigator.push<void>(
                       context,
                       MaterialPageRoute<void>(
-                        builder: (_) => AccountDetailScreen(accountName: a.name),
+                        builder: (_) =>
+                            AccountDetailScreen(accountName: a.name),
                       ),
                     );
                     if (context.mounted) {

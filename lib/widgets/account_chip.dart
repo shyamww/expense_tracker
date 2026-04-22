@@ -16,6 +16,7 @@ class AccountChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -24,10 +25,10 @@ class AccountChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected
               ? scheme.primary.withValues(alpha: 0.12)
-              : Theme.of(context).colorScheme.surface,
+              : scheme.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected ? scheme.primary : Colors.grey.shade300,
+            color: selected ? scheme.primary : theme.dividerColor,
             width: selected ? 2 : 1,
           ),
         ),
@@ -36,7 +37,7 @@ class AccountChip extends StatelessWidget {
           children: [
             Icon(
               Icons.account_balance_rounded,
-              color: selected ? scheme.primary : Colors.grey.shade600,
+              color: selected ? scheme.primary : scheme.onSurfaceVariant,
               size: 22,
             ),
             const SizedBox(width: 8),
@@ -45,7 +46,7 @@ class AccountChip extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                color: selected ? scheme.primary : Colors.grey.shade800,
+                color: selected ? scheme.primary : scheme.onSurface,
               ),
             ),
           ],

@@ -23,17 +23,21 @@ class IncomeHistoryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final green = Colors.green.shade600;
-    final greenBg = Colors.green.shade50;
+    final greenBg = Colors.green.shade600.withValues(alpha: 0.12);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
-        color: isSelected ? scheme.primary.withOpacity(0.08) : scheme.surface,
+        color: isSelected
+            ? scheme.primary.withValues(alpha: 0.08)
+            : scheme.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(
-            color: isSelected ? scheme.primary : Theme.of(context).dividerColor.withOpacity(0.25),
+            color: isSelected
+                ? scheme.primary
+                : Theme.of(context).dividerColor.withValues(alpha: 0.45),
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -72,7 +76,7 @@ class IncomeHistoryTile extends StatelessWidget {
                         Text(
                           entry.account,
                           style: TextStyle(
-                            color: Colors.grey.shade500,
+                            color: scheme.onSurfaceVariant,
                             fontSize: 12,
                           ),
                           maxLines: 1,
@@ -81,7 +85,7 @@ class IncomeHistoryTile extends StatelessWidget {
                       Text(
                         dateStr,
                         style: TextStyle(
-                          color: Colors.grey.shade500,
+                          color: scheme.onSurfaceVariant,
                           fontSize: 12,
                         ),
                       ),

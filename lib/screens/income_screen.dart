@@ -59,14 +59,14 @@ class _IncomeScreenState extends State<IncomeScreen> {
     final expenseProvider = context.read<ExpenseProvider>();
     await provider.loadIncomeForMonth(_currentMonth);
     await expenseProvider.loadExpenses();
-    final history = await DatabaseHelper().getIncomeHistoryForMonth(_currentMonth);
+    final history =
+        await DatabaseHelper().getIncomeHistoryForMonth(_currentMonth);
     final received = expenseProvider
         .expensesForMonth(_currentMonth)
         .where((e) => e.category == CategoryProvider.kReceivedCategoryName)
         .toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    final receivedPaisa =
-        received.fold<int>(0, (s, e) => s + e.amount);
+    final receivedPaisa = received.fold<int>(0, (s, e) => s + e.amount);
     final receivedTotal = rupeesFromPaisa(receivedPaisa);
     final carry = await DatabaseHelper().getCarryForwardForMonth(_currentMonth);
     final spent = expenseProvider.totalSpentForMonth(_currentMonth);
@@ -162,12 +162,12 @@ class _IncomeScreenState extends State<IncomeScreen> {
     final note = _noteController.text.trim();
     final month = DateFormat('yyyy-MM').format(_selectedDate);
     await context.read<IncomeProvider>().setIncome(
-      amountPaisa,
-      month,
-      note: note,
-      date: _selectedDate,
-      account: _selectedAccount!,
-    );
+          amountPaisa,
+          month,
+          note: note,
+          date: _selectedDate,
+          account: _selectedAccount!,
+        );
 
     _amountController.clear();
     _noteController.clear();
@@ -205,6 +205,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
     required IconData icon,
     required Color color,
   }) {
+    final scheme = Theme.of(context).colorScheme;
     return Row(
       children: [
         Container(
@@ -222,7 +223,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: Colors.grey.shade800,
+              color: scheme.onSurface,
             ),
           ),
         ),
@@ -238,7 +239,8 @@ class _IncomeScreenState extends State<IncomeScreen> {
     );
   }
 
-  Future<void> _onReceivedExpenseLongPress(BuildContext context, Expense expense) async {
+  Future<void> _onReceivedExpenseLongPress(
+      BuildContext context, Expense expense) async {
     if (expense.id == null) return;
     setState(() {
       _selectedExpenseId = expense.id;
@@ -255,7 +257,8 @@ class _IncomeScreenState extends State<IncomeScreen> {
     );
   }
 
-  Future<void> _onIncomeHistoryLongPress(BuildContext context, IncomeEntry entry) async {
+  Future<void> _onIncomeHistoryLongPress(
+      BuildContext context, IncomeEntry entry) async {
     if (entry.id == null) return;
     setState(() {
       _selectedIncomeEntryId = entry.id;
@@ -291,6 +294,8 @@ class _IncomeScreenState extends State<IncomeScreen> {
       isScrollControlled: true,
       showDragHandle: true,
       builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final scheme = theme.colorScheme;
         return Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
@@ -307,14 +312,16 @@ class _IncomeScreenState extends State<IncomeScreen> {
                       children: [
                         Text(
                           'Edit income',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w800,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
                         ),
                         const SizedBox(height: 16),
                         TextField(
                           controller: amountCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
                           decoration: InputDecoration(
                             labelText: 'Amount',
                             prefixText: '₹ ',
@@ -338,7 +345,10 @@ class _IncomeScreenState extends State<IncomeScreen> {
                         if (ap.accounts.isNotEmpty) ...[
                           Text(
                             'Account',
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(
                                   fontWeight: FontWeight.w600,
                                 ),
                           ),
@@ -350,7 +360,8 @@ class _IncomeScreenState extends State<IncomeScreen> {
                               return AccountChip(
                                 name: a.name,
                                 selected: editAccount == a.name,
-                                onTap: () => setModalState(() => editAccount = a.name),
+                                onTap: () =>
+                                    setModalState(() => editAccount = a.name),
                               );
                             }).toList(),
                           ),
@@ -358,8 +369,10 @@ class _IncomeScreenState extends State<IncomeScreen> {
                         ],
                         ListTile(
                           contentPadding: EdgeInsets.zero,
-                          leading: Icon(Icons.calendar_today, color: Colors.grey.shade700),
-                          title: Text(DateFormat('dd MMMM yyyy').format(pickedDate)),
+                          leading: Icon(Icons.calendar_today,
+                              color: scheme.onSurfaceVariant),
+                          title: Text(
+                              DateFormat('dd MMMM yyyy').format(pickedDate)),
                           trailing: const Icon(Icons.edit_calendar),
                           onTap: () async {
                             final d = await showDatePicker(
@@ -384,7 +397,8 @@ class _IncomeScreenState extends State<IncomeScreen> {
                               _showError('Please select an account');
                               return;
                             }
-                            final month = DateFormat('yyyy-MM').format(pickedDate);
+                            final month =
+                                DateFormat('yyyy-MM').format(pickedDate);
                             final updated = IncomeEntry(
                               id: entry.id,
                               amount: paisa,
@@ -393,8 +407,11 @@ class _IncomeScreenState extends State<IncomeScreen> {
                               note: noteCtrl.text.trim(),
                               createdAt: pickedDate.toIso8601String(),
                             );
-                            await DatabaseHelper().updateIncomeHistoryEntry(updated);
-                            if (sheetContext.mounted) Navigator.pop(sheetContext);
+                            await DatabaseHelper()
+                                .updateIncomeHistoryEntry(updated);
+                            if (sheetContext.mounted) {
+                              Navigator.pop(sheetContext);
+                            }
                             if (!mounted) return;
                             setState(() => _currentMonth = month);
                             await _loadData();
@@ -425,6 +442,8 @@ class _IncomeScreenState extends State<IncomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final monthAnchor =
         DateTime.tryParse('$_currentMonth-01') ?? DateTime.now();
     final displayMonth = DateFormat('MMMM yyyy').format(monthAnchor);
@@ -450,9 +469,11 @@ class _IncomeScreenState extends State<IncomeScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                     decoration: BoxDecoration(
-                      color: Colors.green.shade50,
+                      color: scheme.surfaceContainerLow,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.green.shade200),
+                      border: Border.all(
+                        color: Colors.green.shade400.withValues(alpha: 0.28),
+                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -467,7 +488,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.green.shade800,
+                                color: scheme.onSurface,
                               ),
                             ),
                           ],
@@ -478,7 +499,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade600,
+                            color: scheme.onSurfaceVariant,
                             letterSpacing: 0.2,
                           ),
                         ),
@@ -500,11 +521,14 @@ class _IncomeScreenState extends State<IncomeScreen> {
                             'Includes carry forward ₹ ${formatRupeesTwoDecimalsFromDouble(_carryForward)}',
                             style: TextStyle(
                               fontSize: 10,
-                              color: Colors.grey.shade600,
+                              color: scheme.onSurfaceVariant,
                             ),
                           ),
                         ],
-                        Divider(color: Colors.green.shade200, height: 18),
+                        Divider(
+                          color: Colors.green.shade400.withValues(alpha: 0.28),
+                          height: 18,
+                        ),
                         _incomeSummaryRow(
                           label: 'Total income',
                           amount: _currentTotal,
@@ -526,7 +550,8 @@ class _IncomeScreenState extends State<IncomeScreen> {
                     controller: _amountController,
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        fontSize: 22, fontWeight: FontWeight.bold),
                     decoration: InputDecoration(
                       prefixText: '₹ ',
                       prefixStyle: const TextStyle(
@@ -538,8 +563,8 @@ class _IncomeScreenState extends State<IncomeScreen> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -557,7 +582,10 @@ class _IncomeScreenState extends State<IncomeScreen> {
                           padding: const EdgeInsets.only(bottom: 8),
                           child: Text(
                             'Add an account in Settings → Accounts.',
-                            style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                            style: TextStyle(
+                              color: scheme.onSurfaceVariant,
+                              fontSize: 14,
+                            ),
                           ),
                         );
                       }
@@ -568,7 +596,8 @@ class _IncomeScreenState extends State<IncomeScreen> {
                           return AccountChip(
                             name: a.name,
                             selected: _selectedAccount == a.name,
-                            onTap: () => setState(() => _selectedAccount = a.name),
+                            onTap: () =>
+                                setState(() => _selectedAccount = a.name),
                           );
                         }).toList(),
                       );
@@ -584,30 +613,36 @@ class _IncomeScreenState extends State<IncomeScreen> {
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
                     ),
                   ),
                   const SizedBox(height: 12),
                   GestureDetector(
                     onTap: _pickDate,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: scheme.surface,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.grey.shade300),
+                        border: Border.all(color: theme.dividerColor),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.calendar_today, size: 20, color: Colors.grey.shade600),
+                          Icon(Icons.calendar_today,
+                              size: 20, color: scheme.onSurfaceVariant),
                           const SizedBox(width: 12),
                           Text(
                             DateFormat('dd MMMM yyyy').format(_selectedDate),
-                            style: const TextStyle(fontSize: 15),
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: scheme.onSurface,
+                            ),
                           ),
                           const Spacer(),
-                          Icon(Icons.edit_calendar, size: 18, color: Colors.grey.shade500),
+                          Icon(Icons.edit_calendar,
+                              size: 18, color: scheme.onSurfaceVariant),
                         ],
                       ),
                     ),
@@ -621,7 +656,8 @@ class _IncomeScreenState extends State<IncomeScreen> {
                       icon: const Icon(Icons.add, size: 20),
                       label: const Text(
                         'Add Income',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w600),
                       ),
                       style: FilledButton.styleFrom(
                         shape: RoundedRectangleBorder(
@@ -643,8 +679,8 @@ class _IncomeScreenState extends State<IncomeScreen> {
                             Icons.chevron_left_rounded,
                             size: 22,
                             color: _canGoIncomeHistoryPrev
-                                ? Colors.grey.shade700
-                                : Colors.grey.shade300,
+                                ? scheme.onSurfaceVariant
+                                : scheme.outlineVariant,
                           ),
                           tooltip: 'Earlier month',
                           visualDensity: VisualDensity.compact,
@@ -664,7 +700,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
-                              color: Colors.grey.shade700,
+                              color: scheme.onSurfaceVariant,
                               letterSpacing: -0.2,
                             ),
                           ),
@@ -677,8 +713,8 @@ class _IncomeScreenState extends State<IncomeScreen> {
                             Icons.chevron_right_rounded,
                             size: 22,
                             color: _canGoIncomeHistoryNext
-                                ? Colors.grey.shade700
-                                : Colors.grey.shade300,
+                                ? scheme.onSurfaceVariant
+                                : scheme.outlineVariant,
                           ),
                           tooltip: 'Later month',
                           visualDensity: VisualDensity.compact,
@@ -711,7 +747,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
                   Text(
                     '(${mergedHistory.length} entries)',
                     style: TextStyle(
-                      color: Colors.grey.shade500,
+                      color: scheme.onSurfaceVariant,
                       fontSize: 13,
                     ),
                   ),
@@ -727,7 +763,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
                 child: Text(
                   'No income added yet',
                   style: TextStyle(
-                    color: Colors.grey.shade500,
+                    color: scheme.onSurfaceVariant,
                     fontSize: 14,
                   ),
                 ),
@@ -762,7 +798,8 @@ class _IncomeScreenState extends State<IncomeScreen> {
                     return ExpenseTile(
                       expense: expense,
                       isSelected: _selectedExpenseId == expense.id,
-                      onDeselect: () => setState(() => _selectedExpenseId = null),
+                      onDeselect: () =>
+                          setState(() => _selectedExpenseId = null),
                       onLongPress: expense.id == null
                           ? null
                           : () => _onReceivedExpenseLongPress(context, expense),

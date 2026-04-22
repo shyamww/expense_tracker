@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_lock_provider.dart';
+import '../providers/theme_provider.dart';
 import '../services/app_lock_service.dart';
 import '../services/expense_reminder_service.dart';
 import '../widgets/feedback_form_sheet.dart';
@@ -11,7 +12,6 @@ import 'backup_screen.dart';
 import 'category_management_screen.dart';
 import 'account_management_screen.dart';
 
-/// Placeholder settings; extend as you add preferences (theme, currency, etc.).
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -31,7 +31,8 @@ class SettingsScreen extends StatelessWidget {
           _SectionHeader(title: 'Notifications'),
           if (kIsWeb)
             ListTile(
-              leading: Icon(Icons.notifications_off_outlined, color: Colors.grey.shade700),
+              leading: Icon(Icons.notifications_off_outlined,
+                  color: Colors.grey.shade700),
               title: const Text('Daily reminder'),
               subtitle: const Text('Not available on web'),
             )
@@ -41,7 +42,8 @@ class SettingsScreen extends StatelessWidget {
           _SectionHeader(title: 'Privacy'),
           if (kIsWeb)
             ListTile(
-              leading: Icon(Icons.lock_outline_rounded, color: Colors.grey.shade700),
+              leading:
+                  Icon(Icons.lock_outline_rounded, color: Colors.grey.shade700),
               title: const Text('App lock'),
               subtitle: const Text('Not available on web'),
             )
@@ -50,7 +52,8 @@ class SettingsScreen extends StatelessWidget {
           const Divider(height: 1),
           _SectionHeader(title: 'General'),
           ListTile(
-            leading: Icon(Icons.info_outline_rounded, color: Colors.grey.shade700),
+            leading:
+                Icon(Icons.info_outline_rounded, color: Colors.grey.shade700),
             title: const Text('App info'),
             subtitle: const Text('Version, developer, and details'),
             onTap: () => _showAppInfoDialog(context),
@@ -58,10 +61,12 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             leading: Icon(Icons.palette_outlined, color: Colors.grey.shade700),
             title: const Text('Appearance'),
-            subtitle: const Text('Theme & display — coming soon'),
+            subtitle: const Text('Switch between light and dark mode'),
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Theme options will be added here.')),
+              showModalBottomSheet<void>(
+                context: context,
+                showDragHandle: true,
+                builder: (_) => const _ThemeSettingsSheet(),
               );
             },
           ),
@@ -72,18 +77,22 @@ class SettingsScreen extends StatelessWidget {
             onTap: () {
               Navigator.push<void>(
                 context,
-                MaterialPageRoute(builder: (_) => const CategoryManagementScreen()),
+                MaterialPageRoute(
+                    builder: (_) => const CategoryManagementScreen()),
               );
             },
           ),
           ListTile(
-            leading: Icon(Icons.account_balance_outlined, color: Colors.grey.shade700),
+            leading: Icon(Icons.account_balance_outlined,
+                color: Colors.grey.shade700),
             title: const Text('Accounts'),
-            subtitle: const Text('Banks and cash — used when adding income or expenses'),
+            subtitle: const Text(
+                'Banks and cash — used when adding income or expenses'),
             onTap: () {
               Navigator.push<void>(
                 context,
-                MaterialPageRoute(builder: (_) => const AccountManagementScreen()),
+                MaterialPageRoute(
+                    builder: (_) => const AccountManagementScreen()),
               );
             },
           ),
@@ -112,7 +121,8 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             leading: Icon(Icons.feedback_outlined, color: Colors.grey.shade700),
             title: const Text('Send feedback'),
-            subtitle: const Text('Sent with Web3Forms — your inbox is not in the app'),
+            subtitle: const Text(
+                'Sent with Web3Forms — your inbox is not in the app'),
             onTap: () => _openFeedbackSheet(context),
           ),
         ],
@@ -142,7 +152,8 @@ class SettingsScreen extends StatelessWidget {
       context: context,
       builder: (ctx) {
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(
@@ -190,7 +201,8 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 22),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
                     color: Colors.grey.shade50,
                     borderRadius: BorderRadius.circular(14),
@@ -231,6 +243,154 @@ class SettingsScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _ThemeSettingsSheet extends StatelessWidget {
+  const _ThemeSettingsSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Appearance',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Choose how the app looks.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 20),
+            _ThemeChoiceTile(
+              icon: Icons.light_mode_rounded,
+              title: 'Light',
+              subtitle: 'Bright surfaces and the current default look',
+              selected: themeProvider.themeMode == ThemeMode.light,
+              onTap: () async {
+                await context
+                    .read<ThemeProvider>()
+                    .setThemeMode(ThemeMode.light);
+                if (context.mounted) Navigator.pop(context);
+              },
+            ),
+            const SizedBox(height: 12),
+            _ThemeChoiceTile(
+              icon: Icons.dark_mode_rounded,
+              title: 'Dark',
+              subtitle: 'Dimmed surfaces for night-time use',
+              selected: themeProvider.themeMode == ThemeMode.dark,
+              onTap: () async {
+                await context
+                    .read<ThemeProvider>()
+                    .setThemeMode(ThemeMode.dark);
+                if (context.mounted) Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ThemeChoiceTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ThemeChoiceTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Material(
+      color: selected ? scheme.primaryContainer : scheme.surface,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: selected ? scheme.primary : theme.dividerColor,
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: selected
+                      ? scheme.primary.withValues(alpha: 0.14)
+                      : scheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  icon,
+                  color: selected ? scheme.primary : scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                selected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_off_rounded,
+                color: selected ? scheme.primary : scheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -343,7 +503,8 @@ class _DailyReminderSettingsState extends State<_DailyReminderSettings> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SwitchListTile(
-          secondary: Icon(Icons.notifications_active_outlined, color: Colors.grey.shade700),
+          secondary: Icon(Icons.notifications_active_outlined,
+              color: Colors.grey.shade700),
           title: const Text('Daily reminder'),
           subtitle: Text(
             _enabled
@@ -352,17 +513,18 @@ class _DailyReminderSettingsState extends State<_DailyReminderSettings> {
           ),
           value: _enabled,
           onChanged: (v) async {
+            final messenger = ScaffoldMessenger.of(context);
+            final timeLabel = _formatTime(context);
             await ExpenseReminderService.instance.setReminderEnabled(v);
-            if (mounted) {
-              setState(() => _enabled = v);
-              if (v) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Reminder scheduled for ${_formatTime(context)}'),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
-              }
+            if (!mounted) return;
+            setState(() => _enabled = v);
+            if (v) {
+              messenger.showSnackBar(
+                SnackBar(
+                  content: Text('Reminder scheduled for $timeLabel'),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
             }
           },
         ),
@@ -429,7 +591,8 @@ class _AppLockSettingsState extends State<_AppLockSettings> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('App lock is on. You can enable Face ID or fingerprint below.'),
+            content: Text(
+                'App lock is on. You can enable Face ID or fingerprint below.'),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -486,15 +649,18 @@ class _AppLockSettingsState extends State<_AppLockSettings> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SwitchListTile(
-          secondary: Icon(Icons.lock_outline_rounded, color: Colors.grey.shade700),
+          secondary:
+              Icon(Icons.lock_outline_rounded, color: Colors.grey.shade700),
           title: const Text('App lock'),
-          subtitle: const Text('4-digit PIN when opening the app or returning from background'),
+          subtitle: const Text(
+              '4-digit PIN when opening the app or returning from background'),
           value: _lockOn,
           onChanged: _onLockToggle,
         ),
         if (_lockOn && _bioAvailable)
           SwitchListTile(
-            secondary: Icon(Icons.fingerprint_rounded, color: Colors.grey.shade700),
+            secondary:
+                Icon(Icons.fingerprint_rounded, color: Colors.grey.shade700),
             title: const Text('Face ID / fingerprint'),
             subtitle: const Text('Unlock with biometrics when available'),
             value: _bioOn,
@@ -585,7 +751,8 @@ class _SetPinDialogState extends State<_SetPinDialog> {
             ),
             if (_err != null) ...[
               const SizedBox(height: 12),
-              Text(_err!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(_err!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ],
           ],
         ),
@@ -687,7 +854,8 @@ class _DisableLockDialogState extends State<_DisableLockDialog> {
             ],
             if (_err != null) ...[
               const SizedBox(height: 12),
-              Text(_err!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(_err!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ],
           ],
         ),
@@ -802,7 +970,8 @@ class _ChangePinDialogState extends State<_ChangePinDialog> {
             ),
             if (_err != null) ...[
               const SizedBox(height: 12),
-              Text(_err!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(_err!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ],
           ],
         ),

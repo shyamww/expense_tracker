@@ -83,6 +83,8 @@ class _MonthlyViewState extends State<MonthlyView> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -94,7 +96,7 @@ class _MonthlyViewState extends State<MonthlyView> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: scheme.surface,
               borderRadius: BorderRadius.circular(14),
               boxShadow: [
                 BoxShadow(
@@ -121,7 +123,7 @@ class _MonthlyViewState extends State<MonthlyView> {
                 IconButton(
                   icon: Icon(
                     Icons.chevron_right_rounded,
-                    color: _isCurrentYear ? Colors.grey.shade300 : null,
+                    color: _isCurrentYear ? scheme.outlineVariant : null,
                   ),
                   onPressed: _isCurrentYear ? null : () => _changeYear(1),
                 ),
@@ -129,7 +131,6 @@ class _MonthlyViewState extends State<MonthlyView> {
             ),
           ),
         ),
-
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.fromLTRB(8, 2, 8, 60),
@@ -137,26 +138,31 @@ class _MonthlyViewState extends State<MonthlyView> {
             itemBuilder: (context, index) {
               final maxMonth = _isCurrentYear ? DateTime.now().month : 12;
               final monthNum = maxMonth - index;
-              final monthKey = '$_selectedYear-${monthNum.toString().padLeft(2, '0')}';
+              final monthKey =
+                  '$_selectedYear-${monthNum.toString().padLeft(2, '0')}';
               final monthDate = DateTime(_selectedYear, monthNum);
               final monthTitle = DateFormat('MMMM').format(monthDate);
-              final startStr = DateFormat('dd MMM').format(DateTime(_selectedYear, monthNum, 1));
+              final startStr = DateFormat('dd MMM')
+                  .format(DateTime(_selectedYear, monthNum, 1));
               final endStr = DateFormat('dd MMM').format(
                 DateTime(_selectedYear, monthNum + 1, 0),
               );
 
-              final totals = _monthlyTotals[monthKey] ?? (spent: 0.0, received: 0.0);
+              final totals =
+                  _monthlyTotals[monthKey] ?? (spent: 0.0, received: 0.0);
               final income = _monthlyIncome[monthKey] ?? 0.0;
               final carryFwd = _monthlyCarryForward[monthKey] ?? 0.0;
               final totalIncome = income + totals.received;
               final balance = carryFwd + totalIncome - totals.spent;
-              final hasData = totals.spent > 0 || totalIncome > 0 || carryFwd != 0;
+              final hasData =
+                  totals.spent > 0 || totalIncome > 0 || carryFwd != 0;
 
               return Container(
                 margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: scheme.surface,
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
@@ -178,14 +184,16 @@ class _MonthlyViewState extends State<MonthlyView> {
                             style: TextStyle(
                               fontWeight: FontWeight.w800,
                               fontSize: 16,
-                              color: hasData ? Colors.grey.shade900 : Colors.grey.shade400,
+                              color: hasData
+                                  ? scheme.onSurface
+                                  : scheme.onSurfaceVariant,
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             '$startStr – $endStr',
                             style: TextStyle(
-                              color: Colors.grey.shade600,
+                              color: scheme.onSurfaceVariant,
                               fontSize: 12,
                               fontWeight: FontWeight.w500,
                             ),
@@ -203,7 +211,7 @@ class _MonthlyViewState extends State<MonthlyView> {
                             fontSize: 14,
                             color: totalIncome > 0
                                 ? const Color(0xFF059669)
-                                : Colors.grey.shade400,
+                                : scheme.onSurfaceVariant,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -214,7 +222,7 @@ class _MonthlyViewState extends State<MonthlyView> {
                             fontSize: 14,
                             color: totals.spent > 0
                                 ? const Color(0xFFDC2626)
-                                : Colors.grey.shade400,
+                                : scheme.onSurfaceVariant,
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -226,7 +234,7 @@ class _MonthlyViewState extends State<MonthlyView> {
                             fontWeight: FontWeight.w800,
                             fontSize: 13,
                             color: !hasData
-                                ? Colors.grey.shade400
+                                ? scheme.onSurfaceVariant
                                 : balance >= 0
                                     ? const Color(0xFF047857)
                                     : const Color(0xFFB91C1C),

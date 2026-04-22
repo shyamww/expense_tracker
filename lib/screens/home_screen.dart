@@ -38,7 +38,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late DateTime _selectedMonth;
   int _lastTappedTab = 0;
@@ -63,7 +64,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     if (!kIsWeb) {
       _navHub = context.read<AppNavigationHub>();
       _navHub!.addListener(_onHomeDashboardRequested);
-      if (await ExpenseReminderService.instance.launchedFromReminderNotification()) {
+      if (await ExpenseReminderService.instance
+          .launchedFromReminderNotification()) {
         if (mounted) _goHome();
       }
     }
@@ -85,7 +87,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final now = DateTime.now();
     final clamped = DateTime(now.year, now.month);
     final monthKey = DateFormat('yyyy-MM').format(clamped);
-    
+
     final incomeProvider = context.read<IncomeProvider>();
     await incomeProvider.loadIncomeForMonth(monthKey, notify: false);
 
@@ -120,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final incomeProvider = context.read<IncomeProvider>();
     final categoryProvider = context.read<CategoryProvider>();
     final accountProvider = context.read<AccountProvider>();
-    
+
     await Future.wait([
       expenseProvider.loadExpenses(notify: false),
       incomeProvider.loadIncomeForCurrentMonth(notify: false),
@@ -155,13 +157,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         (clamped.year == now.year && clamped.month > now.month)) {
       return;
     }
-    if (_selectedMonth.year == clamped.year && _selectedMonth.month == clamped.month) {
+    if (_selectedMonth.year == clamped.year &&
+        _selectedMonth.month == clamped.month) {
       return;
     }
-    
+
     final monthKey = DateFormat('yyyy-MM').format(clamped);
     final incomeProvider = context.read<IncomeProvider>();
-    
+
     await incomeProvider.loadIncomeForMonth(monthKey, notify: false);
 
     if (!mounted) return;
@@ -170,12 +173,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   }
 
   Future<void> _changeMonth(int delta) async {
-    await _selectMonth(DateTime(_selectedMonth.year, _selectedMonth.month + delta));
+    await _selectMonth(
+        DateTime(_selectedMonth.year, _selectedMonth.month + delta));
   }
 
   String get _monthPrefix => DateFormat('yyyy-MM').format(_selectedMonth);
 
-  Future<void> _onExpenseLongPress(BuildContext context, Expense expense) async {
+  Future<void> _onExpenseLongPress(
+      BuildContext context, Expense expense) async {
     if (expense.id == null) return;
     setState(() => _selectedExpenseId = expense.id);
     await showExpenseActionsBottomSheet(
@@ -195,6 +200,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final incomeProvider = context.watch<IncomeProvider>();
     final accountProvider = context.watch<AccountProvider>();
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     if (!_isInitialized) {
       return const Scaffold(
@@ -210,7 +216,6 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     final accountsTotal = accountProvider.cumulativeBalance;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
         title: const Text('Expense Tracker'),
         centerTitle: true,
@@ -239,7 +244,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: scheme.surface,
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.02),
@@ -252,8 +257,9 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               height: 44,
               child: TabBar(
                 controller: _tabController,
-                labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-                unselectedLabelColor: Colors.grey.shade500,
+                labelStyle:
+                    const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                unselectedLabelColor: scheme.onSurfaceVariant,
                 labelColor: theme.colorScheme.primary,
                 indicatorColor: theme.colorScheme.primary,
                 indicatorWeight: 2.5,
@@ -290,8 +296,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.deepPurple,
-        foregroundColor: Colors.white,
+        backgroundColor: scheme.primary,
+        foregroundColor: scheme.onPrimary,
         elevation: 8,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
@@ -313,7 +319,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         height: 72,
         padding: EdgeInsets.zero,
         elevation: 10,
-        color: Colors.white,
+        color: scheme.surface,
         surfaceTintColor: Colors.transparent,
         shadowColor: Colors.black.withValues(alpha: 0.12),
         child: Column(
@@ -361,7 +367,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     onTap: () async {
                       await Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const AccountsListScreen()),
+                        MaterialPageRoute(
+                            builder: (_) => const AccountsListScreen()),
                       );
                       if (mounted) _loadData();
                     },
@@ -375,264 +382,273 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
-Widget _monthNavButton({
-  required IconData icon,
-  required VoidCallback? onTap,
-  bool disabled = false,
-}) {
-  return Material(
-    color: Colors.transparent,
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: disabled ? Colors.grey.shade100 : Colors.white,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: disabled ? Colors.grey.shade200 : Colors.grey.shade300,
+  Widget _monthNavButton({
+    required IconData icon,
+    required VoidCallback? onTap,
+    bool disabled = false,
+  }) {
+    final theme = Theme.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: disabled
+                ? theme.colorScheme.surfaceContainerLow
+                : theme.colorScheme.surface,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: theme.dividerColor,
+            ),
+            boxShadow: disabled
+                ? []
+                : [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
           ),
-          boxShadow: disabled
-              ? []
-              : [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-        ),
-        child: Icon(
-          icon,
-          size: 22,
-          color: disabled ? Colors.grey.shade400 : Colors.black87,
+          child: Icon(
+            icon,
+            size: 22,
+            color: disabled
+                ? theme.colorScheme.outlineVariant
+                : theme.colorScheme.onSurface,
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   /// Slim month strip (all tabs) — less vertical padding under the app bar.
   Widget _buildMonthNavigator(ThemeData theme) {
-  final isCurrent = _isCurrentMonth;
+    final isCurrent = _isCurrentMonth;
 
-  return Padding(
-    padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // LEFT BUTTON
+            _monthNavButton(
+              icon: Icons.chevron_left_rounded,
+              onTap: () => _changeMonth(-1),
+            ),
+
+            // MONTH TEXT (CENTER FOCUS)
+            Expanded(
+              child: Column(
+                children: [
+                  Text(
+                    DateFormat('MMMM yyyy').format(_selectedMonth),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    isCurrent ? 'Current month' : 'Tap arrows to change',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // RIGHT BUTTON
+            _monthNavButton(
+              icon: Icons.chevron_right_rounded,
+              onTap: isCurrent ? null : () => _changeMonth(1),
+              disabled: isCurrent,
+            ),
+          ],
+        ),
       ),
-      child: Row(
-        children: [
-          // LEFT BUTTON
-          _monthNavButton(
-            icon: Icons.chevron_left_rounded,
-            onTap: () => _changeMonth(-1),
-          ),
+    );
+  }
 
-          // MONTH TEXT (CENTER FOCUS)
-          Expanded(
-            child: Column(
+  Widget _buildUnifiedSummaryCard({
+    required double carryForward,
+    required double income,
+    required double spent,
+  }) {
+    final theme = Theme.of(context);
+    final currentBalance = ((carryForward + income - spent).isFinite
+            ? carryForward + income - spent
+            : 0.0)
+        .toDouble();
+    final isCurrent = _isCurrentMonth;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Colors.green.shade400.withValues(alpha: 0.28),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            /// 🔹 MONTH NAVIGATION INSIDE CARD
+            Row(
               children: [
-                Text(
-                  DateFormat('MMMM yyyy').format(_selectedMonth),
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3,
+                _monthNavButton(
+                  icon: Icons.chevron_left_rounded,
+                  onTap: () => _changeMonth(-1),
+                ),
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      DateFormat('MMMM yyyy').format(_selectedMonth),
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: theme.colorScheme.onSurface,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  isCurrent ? 'Current month' : 'Tap arrows to change',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.grey.shade500,
-                  ),
+                _monthNavButton(
+                  icon: Icons.chevron_right_rounded,
+                  onTap: isCurrent ? null : () => _changeMonth(1),
+                  disabled: isCurrent,
                 ),
               ],
             ),
-          ),
 
-          // RIGHT BUTTON
-          _monthNavButton(
-            icon: Icons.chevron_right_rounded,
-            onTap: isCurrent ? null : () => _changeMonth(1),
-            disabled: isCurrent,
-          ),
-        ],
-      ),
-    ),
-  );
-}
+            const SizedBox(height: 8),
 
-
-Widget _buildUnifiedSummaryCard({
-  required double carryForward,
-  required double income,
-  required double spent,
-}) {
-  final currentBalance =
-    ((carryForward + income - spent).isFinite
-        ? carryForward + income - spent
-        : 0.0).toDouble();
-  final isCurrent = _isCurrentMonth;
-
-  return Padding(
-    padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-    child: Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      decoration: BoxDecoration(
-        color: Colors.green.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.green.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          /// 🔹 MONTH NAVIGATION INSIDE CARD
-          Row(
-            children: [
-              _monthNavButton(
-                icon: Icons.chevron_left_rounded,
-                onTap: () => _changeMonth(-1),
-              ),
-
-              Expanded(
-                child: Center(
-                  child: Text(
-                    DateFormat('MMMM yyyy').format(_selectedMonth),
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.green.shade900,
-                        letterSpacing: -0.2,
-                      ),
-                  ),
-                ),
-              ),
-
-              _monthNavButton(
-                icon: Icons.chevron_right_rounded,
-                onTap: isCurrent ? null : () => _changeMonth(1),
-                disabled: isCurrent,
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 8),
-
-          /// 🔹 BALANCE
-          Text(
-            'Current balance',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey.shade600,
-              letterSpacing: 0.2,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            '₹ ${formatRupeesTwoDecimalsFromDouble(currentBalance)}',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: currentBalance >= 0
-                  ? Colors.green.shade800
-                  : Colors.red.shade700,
-              height: 1.05,
-            ),
-          ),
-
-          /// 🔹 CARRY FORWARD
-          if (carryForward != 0) ...[
-            const SizedBox(height: 4),
+            /// 🔹 BALANCE
             Text(
-              'Includes carry forward ₹ ${formatRupeesTwoDecimalsFromDouble(carryForward)}',
+              'Current balance',
               style: TextStyle(
                 fontSize: 10,
-                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurfaceVariant,
+                letterSpacing: 0.2,
               ),
             ),
+            const SizedBox(height: 2),
+            Text(
+              '₹ ${formatRupeesTwoDecimalsFromDouble(currentBalance)}',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: currentBalance >= 0
+                    ? Colors.green.shade800
+                    : Colors.red.shade700,
+                height: 1.05,
+              ),
+            ),
+
+            /// 🔹 CARRY FORWARD
+            if (carryForward != 0) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Includes carry forward ₹ ${formatRupeesTwoDecimalsFromDouble(carryForward)}',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+
+            Divider(
+              color: Colors.green.shade400.withValues(alpha: 0.28),
+              height: 18,
+            ),
+
+            /// 🔹 INCOME
+            _summaryRow(
+              label: 'Total income',
+              amount: income,
+              icon: Icons.south_west_rounded,
+              color: const Color(0xFF2563EB),
+            ),
+            const SizedBox(height: 6),
+
+            /// 🔹 EXPENSE
+            _summaryRow(
+              label: 'Total expense',
+              amount: spent,
+              icon: Icons.north_east_rounded,
+              color: const Color(0xFFDC2626),
+            ),
           ],
-
-          Divider(color: Colors.green.shade200, height: 18),
-
-          /// 🔹 INCOME
-          _summaryRow(
-            label: 'Total income',
-            amount: income,
-            icon: Icons.south_west_rounded,
-            color: const Color(0xFF2563EB),
-          ),
-          const SizedBox(height: 6),
-
-          /// 🔹 EXPENSE
-          _summaryRow(
-            label: 'Total expense',
-            amount: spent,
-            icon: Icons.north_east_rounded,
-            color: const Color(0xFFDC2626),
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-Widget _summaryRow({
-  required String label,
-  required double amount,
-  required IconData icon,
-  required Color color,
-}) {
-  return Row(
-    children: [
-      Container(
-        padding: const EdgeInsets.all(5),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(7),
         ),
-        child: Icon(icon, size: 15, color: color),
       ),
-      const SizedBox(width: 8),
-      Expanded(
-        child: Text(
-          label,
+    );
+  }
+
+  Widget _summaryRow({
+    required String label,
+    required double amount,
+    required IconData icon,
+    required Color color,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(7),
+          ),
+          child: Icon(icon, size: 15, color: color),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: scheme.onSurface,
+            ),
+          ),
+        ),
+        Text(
+          '₹ ${formatRupeesTwoDecimalsFromDouble(amount)}',
           style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey.shade800,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: color,
           ),
         ),
-      ),
-      Text(
-        '₹ ${formatRupeesTwoDecimalsFromDouble(amount)}',
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-          color: color,
-        ),
-      ),
-    ],
-  );
-}
-  
+      ],
+    );
+  }
+
   Widget _buildSummaryCards({
     required double carryForward,
     required double income,
@@ -678,6 +694,7 @@ Widget _summaryRow({
     required String label,
     required VoidCallback onTap,
   }) {
+    final scheme = Theme.of(context).colorScheme;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -686,14 +703,14 @@ Widget _summaryRow({
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 22, color: Colors.deepPurple.shade400),
+            Icon(icon, size: 22, color: scheme.primary),
             const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey.shade800,
+                color: scheme.onSurface,
               ),
             ),
           ],
@@ -702,7 +719,9 @@ Widget _summaryRow({
     );
   }
 
-  Widget _buildDailyTab(ExpenseProvider expenseProvider, IncomeProvider incomeProvider) {
+  Widget _buildDailyTab(
+      ExpenseProvider expenseProvider, IncomeProvider incomeProvider) {
+    final theme = Theme.of(context);
     final grouped = expenseProvider.getExpensesGroupedByDay(_monthPrefix);
     final incomeByDay = <String, List<IncomeEntry>>{};
     for (final inc in incomeProvider.allIncomeHistory) {
@@ -720,20 +739,24 @@ Widget _summaryRow({
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.receipt_long_rounded, size: 60, color: Colors.grey.shade400),
+            Icon(Icons.receipt_long_rounded,
+                size: 60, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(height: 6),
             Text(
               'No activity yet',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey.shade800,
+                color: theme.colorScheme.onSurface,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               'Tap + for expenses or use Income for salary',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+              style: TextStyle(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontSize: 14,
+              ),
             ),
           ],
         ),
@@ -751,19 +774,20 @@ Widget _summaryRow({
         final dayIncome = incomeByDay[dateStr] ?? [];
         final isCollapsed = _collapsedDates.contains(dateStr);
         final dayTotalPaisa = dayExpenses
-            .where((e) => ReportingCategoryNames.countsAsSpendingInReports(e.category))
+            .where((e) =>
+                ReportingCategoryNames.countsAsSpendingInReports(e.category))
             .fold<int>(0, (sum, e) => sum + e.amount);
         final dayReceivedPaisa = dayExpenses
-                .where((e) => ReportingCategoryNames.countsAsExternalReceived(e.category))
+                .where((e) =>
+                    ReportingCategoryNames.countsAsExternalReceived(e.category))
                 .fold<int>(0, (sum, e) => sum + e.amount) +
             dayIncome.fold<int>(0, (sum, e) => sum + e.amount);
         final dayTotal = rupeesFromPaisa(dayTotalPaisa);
         final dayReceived = rupeesFromPaisa(dayReceivedPaisa);
 
         final date = DateTime.tryParse(dateStr);
-        final displayDate = date != null
-            ? DateFormat('dd MMM, EEEE').format(date)
-            : dateStr;
+        final displayDate =
+            date != null ? DateFormat('dd MMM, EEEE').format(date) : dateStr;
 
         final itemCount = dayExpenses.length + dayIncome.length;
 
@@ -782,13 +806,14 @@ Widget _summaryRow({
                 });
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
                 child: Row(
                   children: [
                     Icon(
                       isCollapsed ? Icons.chevron_right : Icons.expand_more,
                       size: 20,
-                      color: Colors.grey.shade600,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                     const SizedBox(width: 4),
                     Text(
@@ -796,7 +821,7 @@ Widget _summaryRow({
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade700,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                     const Spacer(),
@@ -825,7 +850,7 @@ Widget _summaryRow({
                       '($itemCount)',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey.shade500,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -856,8 +881,7 @@ Widget _summaryRow({
                 );
               }),
             ],
-            if (!isCollapsed)
-              Divider(height: 1, color: Colors.grey.shade200),
+            if (!isCollapsed) Divider(height: 1, color: theme.dividerColor),
           ],
         );
       },
@@ -879,9 +903,11 @@ class _BalanceSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = balance >= 0 ? const Color(0xFF059669) : const Color(0xFFDC2626);
+    final accent =
+        balance >= 0 ? const Color(0xFF059669) : const Color(0xFFDC2626);
     final hasCarry = carryForward != 0;
-    final carryColor = carryForward >= 0 ? const Color(0xFF0D9488) : const Color(0xFFEA580C);
+    final carryColor =
+        carryForward >= 0 ? const Color(0xFF0D9488) : const Color(0xFFEA580C);
     final carryBg = carryForward >= 0
         ? const Color(0xFFCCFBF1).withValues(alpha: 0.65)
         : const Color(0xFFFFEDD5).withValues(alpha: 0.7);
@@ -908,7 +934,8 @@ class _BalanceSummaryCard extends StatelessWidget {
               color: accent.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(7),
             ),
-            child: Icon(Icons.account_balance_wallet_rounded, size: 16, color: accent),
+            child: Icon(Icons.account_balance_wallet_rounded,
+                size: 16, color: accent),
           ),
           const SizedBox(height: 5),
           Text(
@@ -936,15 +963,18 @@ class _BalanceSummaryCard extends StatelessWidget {
             width: double.infinity,
             child: hasCarry
                 ? Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                     decoration: BoxDecoration(
                       color: carryBg,
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: carryColor.withValues(alpha: 0.22)),
+                      border:
+                          Border.all(color: carryColor.withValues(alpha: 0.22)),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.swap_horiz_rounded, size: 11, color: carryColor),
+                        Icon(Icons.swap_horiz_rounded,
+                            size: 11, color: carryColor),
                         const SizedBox(width: 3),
                         Expanded(
                           child: Text(

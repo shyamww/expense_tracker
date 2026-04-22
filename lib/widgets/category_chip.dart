@@ -15,6 +15,8 @@ class CategoryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -22,11 +24,11 @@ class CategoryChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           color: selected
-              ? category.color.withOpacity(0.15)
-              : Theme.of(context).colorScheme.surface,
+              ? category.color.withValues(alpha: 0.15)
+              : scheme.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: selected ? category.color : Colors.grey.shade300,
+            color: selected ? category.color : theme.dividerColor,
             width: selected ? 2 : 1,
           ),
         ),
@@ -35,7 +37,7 @@ class CategoryChip extends StatelessWidget {
           children: [
             Icon(
               category.icon,
-              color: selected ? category.color : Colors.grey.shade600,
+              color: selected ? category.color : scheme.onSurfaceVariant,
               size: 26,
             ),
             const SizedBox(height: 4),
@@ -44,7 +46,7 @@ class CategoryChip extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                color: selected ? category.color : Colors.grey.shade700,
+                color: selected ? category.color : scheme.onSurfaceVariant,
               ),
             ),
           ],

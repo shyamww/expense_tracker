@@ -50,7 +50,8 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
 
   Future<void> _loadLedger() async {
     setState(() => _loading = true);
-    final ledger = await DatabaseHelper().getAccountMonthLedger(widget.accountName, _monthKey);
+    final ledger = await DatabaseHelper()
+        .getAccountMonthLedger(widget.accountName, _monthKey);
     if (mounted) {
       setState(() {
         _ledger = ledger;
@@ -62,10 +63,14 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
   Future<void> _selectMonth(DateTime m) async {
     final clamped = DateTime(m.year, m.month);
     final now = DateTime.now();
-    if (clamped.year > now.year || (clamped.year == now.year && clamped.month > now.month)) {
+    if (clamped.year > now.year ||
+        (clamped.year == now.year && clamped.month > now.month)) {
       return;
     }
-    if (_selectedMonth.year == clamped.year && _selectedMonth.month == clamped.month) return;
+    if (_selectedMonth.year == clamped.year &&
+        _selectedMonth.month == clamped.month) {
+      return;
+    }
     setState(() => _selectedMonth = clamped);
     await _loadLedger();
   }
@@ -93,7 +98,8 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
     );
   }
 
-  Future<void> _onIncomeHistoryLongPress(BuildContext context, IncomeEntry entry) async {
+  Future<void> _onIncomeHistoryLongPress(
+      BuildContext context, IncomeEntry entry) async {
     if (entry.id == null) return;
     setState(() {
       _selectedIncomeEntryId = entry.id;
@@ -127,6 +133,8 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
       isScrollControlled: true,
       showDragHandle: true,
       builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final scheme = theme.colorScheme;
         return Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
@@ -148,7 +156,8 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                     const SizedBox(height: 16),
                     TextField(
                       controller: amountCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                       decoration: InputDecoration(
                         labelText: 'Amount',
                         prefixText: '₹ ',
@@ -181,14 +190,16 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade800,
+                        color: scheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 12),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.calendar_today, color: Colors.grey.shade700),
-                      title: Text(DateFormat('dd MMMM yyyy').format(pickedDate)),
+                      leading: Icon(Icons.calendar_today,
+                          color: scheme.onSurfaceVariant),
+                      title:
+                          Text(DateFormat('dd MMMM yyyy').format(pickedDate)),
                       trailing: const Icon(Icons.edit_calendar),
                       onTap: () async {
                         final d = await showDatePicker(
@@ -218,7 +229,8 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                           note: noteCtrl.text.trim(),
                           createdAt: pickedDate.toIso8601String(),
                         );
-                        await DatabaseHelper().updateIncomeHistoryEntry(updated);
+                        await DatabaseHelper()
+                            .updateIncomeHistoryEntry(updated);
                         if (sheetContext.mounted) Navigator.pop(sheetContext);
                         if (!mounted) return;
                         await incomeProv.loadIncomeForMonth(_monthKey);
@@ -247,7 +259,8 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
     noteCtrl.dispose();
   }
 
-  Future<void> _onExpenseLongPress(BuildContext context, Expense expense) async {
+  Future<void> _onExpenseLongPress(
+      BuildContext context, Expense expense) async {
     if (expense.id == null) return;
     setState(() {
       _selectedExpenseId = expense.id;
@@ -272,10 +285,10 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final ledger = _ledger;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
         title: Text(widget.accountName),
         centerTitle: true,
@@ -307,21 +320,25 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.receipt_long_outlined, size: 52, color: Colors.grey.shade400),
+                            Icon(Icons.receipt_long_outlined,
+                                size: 52, color: scheme.onSurfaceVariant),
                             const SizedBox(height: 10),
                             Text(
                               'No activity this month',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.grey.shade800,
+                                color: scheme.onSurface,
                               ),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               'Income or expenses on this account will show here.',
                               textAlign: TextAlign.center,
-                              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                              style: TextStyle(
+                                color: scheme.onSurfaceVariant,
+                                fontSize: 14,
+                              ),
                             ),
                           ],
                         ),
@@ -345,10 +362,14 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                                 }
                               });
                             },
-                            onExpenseLongPress: (e) => _onExpenseLongPress(context, e),
-                            onDeselect: () => setState(() => _selectedExpenseId = null),
-                            onIncomeLongPress: (e) => _onIncomeHistoryLongPress(context, e),
-                            onIncomeDeselect: () => setState(() => _selectedIncomeEntryId = null),
+                            onExpenseLongPress: (e) =>
+                                _onExpenseLongPress(context, e),
+                            onDeselect: () =>
+                                setState(() => _selectedExpenseId = null),
+                            onIncomeLongPress: (e) =>
+                                _onIncomeHistoryLongPress(context, e),
+                            onIncomeDeselect: () =>
+                                setState(() => _selectedIncomeEntryId = null),
                           );
                         },
                       ),
@@ -376,6 +397,7 @@ class _MonthStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = theme.colorScheme;
     final monthStyle = theme.textTheme.titleMedium?.copyWith(
       fontWeight: FontWeight.w800,
       fontSize: 15,
@@ -390,7 +412,7 @@ class _MonthStrip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
@@ -417,7 +439,7 @@ class _MonthStrip extends StatelessWidget {
             icon: Icon(
               Icons.chevron_right_rounded,
               size: 22,
-              color: isCurrentMonth ? Colors.grey.shade300 : null,
+              color: isCurrentMonth ? scheme.outlineVariant : null,
             ),
             onPressed: onNext,
           ),
@@ -434,14 +456,17 @@ class _AccountSummaryStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final bal = ledger.balance;
-    final balColor = bal >= 0 ? const Color(0xFF059669) : const Color(0xFFDC2626);
+    final balColor =
+        bal >= 0 ? const Color(0xFF059669) : const Color(0xFFDC2626);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: theme.dividerColor),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -457,6 +482,7 @@ class _AccountSummaryStrip extends StatelessWidget {
             children: [
               Expanded(
                 child: _miniStat(
+                  context,
                   'Carry forward',
                   ledger.carryForward,
                   const Color(0xFF0D9488),
@@ -464,6 +490,7 @@ class _AccountSummaryStrip extends StatelessWidget {
               ),
               Expanded(
                 child: _miniStat(
+                  context,
                   'Income',
                   ledger.monthIncome,
                   const Color(0xFF2563EB),
@@ -476,6 +503,7 @@ class _AccountSummaryStrip extends StatelessWidget {
             children: [
               Expanded(
                 child: _miniStat(
+                  context,
                   'Expense',
                   ledger.monthSpent,
                   const Color(0xFFDC2626),
@@ -490,7 +518,7 @@ class _AccountSummaryStrip extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade600,
+                        color: scheme.onSurfaceVariant,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -512,7 +540,12 @@ class _AccountSummaryStrip extends StatelessWidget {
     );
   }
 
-  Widget _miniStat(String label, double value, Color accent) {
+  Widget _miniStat(
+    BuildContext context,
+    String label,
+    double value,
+    Color accent,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -521,7 +554,7 @@ class _AccountSummaryStrip extends StatelessWidget {
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
-            color: Colors.grey.shade600,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 2),
@@ -562,41 +595,41 @@ class _AccountDaySection extends StatelessWidget {
   });
 
   bool isSpending(String category) {
-  return ReportingCategoryNames.countsAsSpendingInReports(category) ||
-         category == ReportingCategoryNames.transferOut;
-}
+    return ReportingCategoryNames.countsAsSpendingInReports(category) ||
+        category == ReportingCategoryNames.transferOut;
+  }
 
-bool isReceived(String category) {
-  return ReportingCategoryNames.countsAsExternalReceived(category) ||
-         category == ReportingCategoryNames.transferIn;
-}
+  bool isReceived(String category) {
+    return ReportingCategoryNames.countsAsExternalReceived(category) ||
+        category == ReportingCategoryNames.transferIn;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final date = DateTime.tryParse(day.date);
-    final displayDate = date != null
-        ? DateFormat('dd MMM, EEEE').format(date)
-        : day.date;
+    final displayDate =
+        date != null ? DateFormat('dd MMM, EEEE').format(date) : day.date;
 
-    
     bool isAccountExpense(String c) {
-        return ReportingCategoryNames.countsAsSpendingInReports(c) ||
-              c == ReportingCategoryNames.transferOut;
-      }
+      return ReportingCategoryNames.countsAsSpendingInReports(c) ||
+          c == ReportingCategoryNames.transferOut;
+    }
 
-      bool isAccountIncome(String c) {
-        return ReportingCategoryNames.countsAsExternalReceived(c) ||
-              c == ReportingCategoryNames.transferIn;
-      }
+    bool isAccountIncome(String c) {
+      return ReportingCategoryNames.countsAsExternalReceived(c) ||
+          c == ReportingCategoryNames.transferIn;
+    }
 
     final spentPaisa = day.expenses
-    .where((e) => isAccountExpense(e.category))
-    .fold<int>(0, (s, e) => s + e.amount);
+        .where((e) => isAccountExpense(e.category))
+        .fold<int>(0, (s, e) => s + e.amount);
 
-final receivedPaisa = day.expenses
-        .where((e) => isAccountIncome(e.category))
-        .fold<int>(0, (s, e) => s + e.amount) +
-    day.incomeEntries.fold<int>(0, (s, e) => s + e.amount);
+    final receivedPaisa = day.expenses
+            .where((e) => isAccountIncome(e.category))
+            .fold<int>(0, (s, e) => s + e.amount) +
+        day.incomeEntries.fold<int>(0, (s, e) => s + e.amount);
 
     final daySpent = rupeesFromPaisa(spentPaisa);
     final dayReceived = rupeesFromPaisa(receivedPaisa);
@@ -613,7 +646,7 @@ final receivedPaisa = day.expenses
                 Icon(
                   collapsed ? Icons.chevron_right : Icons.expand_more,
                   size: 20,
-                  color: Colors.grey.shade600,
+                  color: scheme.onSurfaceVariant,
                 ),
                 const SizedBox(width: 4),
                 Text(
@@ -621,7 +654,7 @@ final receivedPaisa = day.expenses
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: Colors.grey.shade700,
+                    color: scheme.onSurfaceVariant,
                   ),
                 ),
                 const Spacer(),
@@ -647,7 +680,10 @@ final receivedPaisa = day.expenses
                 const SizedBox(width: 4),
                 Text(
                   '(${day.itemCount})',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
@@ -659,23 +695,24 @@ final receivedPaisa = day.expenses
               expense: expense,
               isSelected: selectedExpenseId == expense.id,
               onDeselect: onDeselect,
-              onLongPress: expense.id == null ? null : () => onExpenseLongPress(expense),
+              onLongPress:
+                  expense.id == null ? null : () => onExpenseLongPress(expense),
             ),
           ),
           ...day.incomeEntries.map((entry) {
             final dt = DateTime.tryParse(entry.createdAt);
-            final dateStr = dt != null
-                ? DateFormat('dd MMM yyyy, hh:mm a').format(dt)
-                : '';
+            final dateStr =
+                dt != null ? DateFormat('dd MMM yyyy, hh:mm a').format(dt) : '';
             return IncomeHistoryTile(
               entry: entry,
               dateStr: dateStr,
               isSelected: selectedIncomeEntryId == entry.id,
               onDeselect: onIncomeDeselect,
-              onLongPress: entry.id == null ? null : () => onIncomeLongPress(entry),
+              onLongPress:
+                  entry.id == null ? null : () => onIncomeLongPress(entry),
             );
           }),
-          Divider(height: 1, color: Colors.grey.shade200),
+          Divider(height: 1, color: theme.dividerColor),
         ],
       ],
     );

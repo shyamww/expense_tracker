@@ -100,10 +100,10 @@ class _ReportScreenState extends State<ReportScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final catProv = context.watch<CategoryProvider>();
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F7F7), // 👈 important
       appBar: AppBar(
         title: const Text('Reports'),
         centerTitle: true,
@@ -216,7 +216,7 @@ class _ReportScreenState extends State<ReportScreen> {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 14),
                     child: Material(
-                      color: Colors.white,
+                      color: scheme.surface,
                       borderRadius: BorderRadius.circular(18),
                       child: InkWell(
                         onTap: () => _openCategoryTransactions(entry.key),
@@ -226,7 +226,7 @@ class _ReportScreenState extends State<ReportScreen> {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(18),
                             border: Border.all(
-                              color: Colors.grey.shade200,
+                              color: theme.dividerColor,
                             ),
                             boxShadow: [
                               BoxShadow(
@@ -264,7 +264,7 @@ class _ReportScreenState extends State<ReportScreen> {
                                     Text(
                                       'Tap to view transactions',
                                       style: TextStyle(
-                                        color: Colors.grey.shade600,
+                                        color: scheme.onSurfaceVariant,
                                         fontSize: 12,
                                       ),
                                     ),
@@ -274,7 +274,7 @@ class _ReportScreenState extends State<ReportScreen> {
                                       child: LinearProgressIndicator(
                                         value: percentage / 100,
                                         minHeight: 6,
-                                        backgroundColor: Colors.grey.shade200,
+                                        backgroundColor: theme.dividerColor,
                                         color:
                                             info.color.withValues(alpha: 0.9),
                                       ),
@@ -297,7 +297,7 @@ class _ReportScreenState extends State<ReportScreen> {
                                   Text(
                                     '${percentage.toStringAsFixed(1)}%',
                                     style: TextStyle(
-                                      color: Colors.grey.shade500,
+                                      color: scheme.onSurfaceVariant,
                                     ),
                                   ),
                                 ],
@@ -324,16 +324,21 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Widget _buildDateButton(String label, DateTime date, VoidCallback onTap) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return InkWell(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: Colors.grey.shade300),
+          color: scheme.surface,
+          border: Border.all(color: theme.dividerColor),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Text(DateFormat('dd MMM yyyy').format(date)),
+        child: Text(
+          DateFormat('dd MMM yyyy').format(date),
+          style: TextStyle(color: scheme.onSurface),
+        ),
       ),
     );
   }
@@ -404,6 +409,7 @@ class _CategoryTransactionsSheetState
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final scheme = Theme.of(context).colorScheme;
 
     return SafeArea(
       child: Padding(
@@ -429,7 +435,7 @@ class _CategoryTransactionsSheetState
                     Text(
                       '${widget.expenses.length} transactions · ₹ ${formatRupeesTwoDecimalsFromDouble(widget.total)}',
                       style: TextStyle(
-                        color: Colors.grey.shade600,
+                        color: scheme.onSurfaceVariant,
                         fontSize: 13,
                       ),
                     ),
@@ -437,7 +443,7 @@ class _CategoryTransactionsSheetState
                     Text(
                       'Long press a transaction to modify or delete it.',
                       style: TextStyle(
-                        color: Colors.grey.shade500,
+                        color: scheme.onSurfaceVariant,
                         fontSize: 12,
                       ),
                     ),

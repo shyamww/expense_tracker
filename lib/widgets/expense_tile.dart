@@ -36,12 +36,16 @@ class ExpenseTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Material(
-        color: isSelected ? scheme.primary.withOpacity(0.08) : scheme.surface,
+        color: isSelected
+            ? scheme.primary.withValues(alpha: 0.08)
+            : scheme.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(
-            color: isSelected ? scheme.primary : Theme.of(context).dividerColor.withOpacity(0.25),
+            color: isSelected
+                ? scheme.primary
+                : Theme.of(context).dividerColor.withValues(alpha: 0.45),
             width: isSelected ? 2 : 1,
           ),
         ),
@@ -56,7 +60,7 @@ class ExpenseTile extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: info.color.withOpacity(0.12),
+                    color: info.color.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(info.icon, color: info.color, size: 22),
@@ -77,7 +81,7 @@ class ExpenseTile extends StatelessWidget {
                         Text(
                           displayExpenseNote(expense.note),
                           style: TextStyle(
-                            color: Colors.grey.shade600,
+                            color: scheme.onSurfaceVariant,
                             fontSize: 13,
                           ),
                           maxLines: 1,
@@ -87,7 +91,7 @@ class ExpenseTile extends StatelessWidget {
                         Text(
                           expense.account,
                           style: TextStyle(
-                            color: Colors.grey.shade500,
+                            color: scheme.onSurfaceVariant,
                             fontSize: 12,
                           ),
                           maxLines: 1,
@@ -96,7 +100,7 @@ class ExpenseTile extends StatelessWidget {
                       Text(
                         dateStr,
                         style: TextStyle(
-                          color: Colors.grey.shade500,
+                          color: scheme.onSurfaceVariant,
                           fontSize: 12,
                         ),
                       ),
