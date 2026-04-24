@@ -182,7 +182,7 @@ class ExpenseReminderService {
       'Add today\'s spending so your tracker stays up to date.',
       scheduled,
       details,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.wallClockTime,
       matchDateTimeComponents: DateTimeComponents.time,
       payload: 'daily_expense_reminder',
