@@ -10,11 +10,14 @@ import '../models/app_account.dart';
 class AccountProvider extends ChangeNotifier {
   final DatabaseHelper _db = DatabaseHelper();
 
-  List<AppAccount> _accounts = [];
+  List<AppAccount> _allAccounts = [];
   double _cumulativeBalance = 0;
   Map<String, int> _balancesByAccount = {};
 
-  List<AppAccount> get accounts => List.unmodifiable(_accounts);
+  List<AppAccount> get accounts =>
+      List.unmodifiable(_allAccounts.where((a) => !a.archived));
+  List<AppAccount> get archivedAccounts =>
+      List.unmodifiable(_allAccounts.where((a) => a.archived));
   double get cumulativeBalance => _cumulativeBalance;
 
   /// Net balance for [accountName] in rupees (income + Received − other expenses).
@@ -23,7 +26,7 @@ class AccountProvider extends ChangeNotifier {
       );
 
   Future<void> refresh({bool notify = true}) async {
-    _accounts = await _db.getAccounts();
+    _allAccounts = await _db.getAccounts(includeArchived: true);
     _cumulativeBalance = await _db.getCumulativeAccountBalance();
     _balancesByAccount = await _db.getPerAccountBalances();
     if (notify) notifyListeners();
@@ -34,9 +37,9 @@ class AccountProvider extends ChangeNotifier {
   Future<void> addAccount(AppAccount draft) async {
     final name = draft.name.trim();
     if (name.isEmpty) return;
-    final order = _accounts.isEmpty
+    final order = _allAccounts.isEmpty
         ? 0
-        : _accounts.map((e) => e.sortOrder).reduce(max) + 1;
+        : _allAccounts.map((e) => e.sortOrder).reduce(max) + 1;
     final row = draft.copyWith(name: name, sortOrder: order);
     try {
       await _db.insertAccount(row);
@@ -81,6 +84,18 @@ class AccountProvider extends ChangeNotifier {
       await _db.reassignIncomeHistoryAccount(fromName: a.name, toName: target);
     }
     await _db.deleteAccountById(a.id!);
+    await refresh();
+  }
+
+  Future<void> archiveAccount(AppAccount a) async {
+    if (a.id == null) return;
+    await _db.setAccountArchived(a.id!, true);
+    await refresh();
+  }
+
+  Future<void> restoreAccount(AppAccount a) async {
+    if (a.id == null) return;
+    await _db.setAccountArchived(a.id!, false);
     await refresh();
   }
 

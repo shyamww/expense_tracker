@@ -12,6 +12,7 @@ class ExpenseCategory {
   final int colorValue;
   final int sortOrder;
   final bool systemLocked;
+  final bool archived;
 
   const ExpenseCategory({
     this.id,
@@ -20,6 +21,7 @@ class ExpenseCategory {
     required this.colorValue,
     this.sortOrder = 0,
     this.systemLocked = false,
+    this.archived = false,
   });
 
   IconData get iconData {
@@ -42,6 +44,7 @@ class ExpenseCategory {
         'color': colorValue,
         'sort_order': sortOrder,
         'system_locked': systemLocked ? 1 : 0,
+        'archived': archived ? 1 : 0,
       };
 
   factory ExpenseCategory.fromMap(Map<String, dynamic> map) {
@@ -52,6 +55,7 @@ class ExpenseCategory {
       colorValue: map['color'] as int,
       sortOrder: (map['sort_order'] as num?)?.toInt() ?? 0,
       systemLocked: (map['system_locked'] as num?)?.toInt() == 1,
+      archived: (map['archived'] as num?)?.toInt() == 1,
     );
   }
 
@@ -62,6 +66,7 @@ class ExpenseCategory {
     int? colorValue,
     int? sortOrder,
     bool? systemLocked,
+    bool? archived,
   }) {
     return ExpenseCategory(
       id: id ?? this.id,
@@ -70,6 +75,7 @@ class ExpenseCategory {
       colorValue: colorValue ?? this.colorValue,
       sortOrder: sortOrder ?? this.sortOrder,
       systemLocked: systemLocked ?? this.systemLocked,
+      archived: archived ?? this.archived,
     );
   }
 }

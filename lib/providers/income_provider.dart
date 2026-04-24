@@ -14,11 +14,11 @@ class IncomeProvider extends ChangeNotifier {
   double _carryForward = 0.0;
   double get carryForward => _carryForward;
 
-  double get monthlyIncome =>
-      rupeesFromPaisa(_currentIncome?.amount ?? 0);
+  double get monthlyIncome => rupeesFromPaisa(_currentIncome?.amount ?? 0);
 
   List<IncomeEntry> _allIncomeHistory = [];
-  List<IncomeEntry> get allIncomeHistory => List.unmodifiable(_allIncomeHistory);
+  List<IncomeEntry> get allIncomeHistory =>
+      List.unmodifiable(_allIncomeHistory);
 
   Future<void> loadAllIncomeHistory() async {
     _allIncomeHistory = await _dbHelper.getAllIncomeHistory();
@@ -49,10 +49,22 @@ class IncomeProvider extends ChangeNotifier {
     String account = '',
   }) async {
     final income = Income(amount: amountPaisa, month: month);
-    await _dbHelper.upsertIncome(income, note: note, date: date, account: account);
+    await _dbHelper.upsertIncome(income,
+        note: note, date: date, account: account);
     _currentIncome = await _dbHelper.getIncomeForMonth(month);
     _carryForward = await _dbHelper.getCarryForwardForMonth(month);
     await loadAllIncomeHistory();
     notifyListeners();
+  }
+
+  Future<IncomeEntry?> deleteIncomeHistoryWithUndoData(int id) async {
+    final deleted = await _dbHelper.deleteIncomeHistoryEntryAndGetDeleted(id);
+    await loadIncomeForCurrentMonth();
+    return deleted;
+  }
+
+  Future<void> restoreDeletedIncomeHistoryEntry(IncomeEntry entry) async {
+    await _dbHelper.restoreIncomeHistoryEntry(entry);
+    await loadIncomeForCurrentMonth();
   }
 }

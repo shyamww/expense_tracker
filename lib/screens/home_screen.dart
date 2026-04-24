@@ -186,6 +186,7 @@ class _HomeScreenState extends State<HomeScreen>
     await showExpenseActionsBottomSheet(
       context: context,
       expense: expense,
+      onRefresh: _loadData,
       onClosed: () {
         if (!mounted) return;
         setState(() => _selectedExpenseId = null);

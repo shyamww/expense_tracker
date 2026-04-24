@@ -40,7 +40,7 @@ class DatabaseHelper {
     final path = p.join(dbPath, 'expense_tracker.db');
     _database = await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -83,7 +83,8 @@ class DatabaseHelper {
         icon_code_point INTEGER NOT NULL,
         color INTEGER NOT NULL,
         sort_order INTEGER NOT NULL DEFAULT 0,
-        system_locked INTEGER NOT NULL DEFAULT 0
+        system_locked INTEGER NOT NULL DEFAULT 0,
+        archived INTEGER NOT NULL DEFAULT 0
       )
     ''');
     await _insertSeedExpenseCategories(db);
@@ -91,7 +92,8 @@ class DatabaseHelper {
       CREATE TABLE accounts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
-        sort_order INTEGER NOT NULL DEFAULT 0
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        archived INTEGER NOT NULL DEFAULT 0
       )
     ''');
     await _insertSeedAccounts(db);
@@ -117,7 +119,8 @@ class DatabaseHelper {
           icon_code_point INTEGER NOT NULL,
           color INTEGER NOT NULL,
           sort_order INTEGER NOT NULL DEFAULT 0,
-          system_locked INTEGER NOT NULL DEFAULT 0
+          system_locked INTEGER NOT NULL DEFAULT 0,
+          archived INTEGER NOT NULL DEFAULT 0
         )
       ''');
       await _insertSeedExpenseCategories(db);
@@ -128,7 +131,8 @@ class DatabaseHelper {
         CREATE TABLE IF NOT EXISTS accounts (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT NOT NULL UNIQUE,
-          sort_order INTEGER NOT NULL DEFAULT 0
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          archived INTEGER NOT NULL DEFAULT 0
         )
       ''');
       await _insertSeedAccounts(db);
@@ -150,6 +154,18 @@ class DatabaseHelper {
     }
     if (oldVersion < 6) {
       await _insertSeedExpenseCategories(db);
+    }
+    if (oldVersion < 7) {
+      try {
+        await db.execute(
+          "ALTER TABLE expense_categories ADD COLUMN archived INTEGER NOT NULL DEFAULT 0",
+        );
+      } catch (_) {}
+      try {
+        await db.execute(
+          "ALTER TABLE accounts ADD COLUMN archived INTEGER NOT NULL DEFAULT 0",
+        );
+      } catch (_) {}
     }
   }
 
@@ -263,7 +279,9 @@ class DatabaseHelper {
 
   // ── Expense categories ──
 
-  Future<List<ExpenseCategory>> getExpenseCategories() async {
+  Future<List<ExpenseCategory>> getExpenseCategories({
+    bool includeArchived = false,
+  }) async {
     if (kIsWeb) {
       if (_webExpenseCategories.isEmpty) {
         for (final c in buildSeededExpenseCategories()) {
@@ -274,6 +292,7 @@ class DatabaseHelper {
             'color': c.colorValue,
             'sort_order': c.sortOrder,
             'system_locked': c.systemLocked ? 1 : 0,
+            'archived': c.archived ? 1 : 0,
           });
         }
       } else {
@@ -288,17 +307,24 @@ class DatabaseHelper {
             'color': c.colorValue,
             'sort_order': c.sortOrder,
             'system_locked': c.systemLocked ? 1 : 0,
+            'archived': c.archived ? 1 : 0,
           });
           names.add(c.name);
         }
       }
       final sorted = List<Map<String, dynamic>>.from(_webExpenseCategories)
+        ..removeWhere((m) =>
+            !includeArchived && ((m['archived'] as num?)?.toInt() ?? 0) == 1)
         ..sort((a, b) => ((a['sort_order'] as num?)?.toInt() ?? 0)
             .compareTo((b['sort_order'] as num?)?.toInt() ?? 0));
       return sorted.map((m) => ExpenseCategory.fromMap(m)).toList();
     }
     final db = await _getDb();
-    final maps = await db.query('expense_categories', orderBy: 'sort_order ASC, name ASC');
+    final maps = await db.query(
+      'expense_categories',
+      where: includeArchived ? null : 'archived = 0',
+      orderBy: 'sort_order ASC, name ASC',
+    );
     return maps.map((m) => ExpenseCategory.fromMap(m)).toList();
   }
 
@@ -309,9 +335,11 @@ class DatabaseHelper {
       'color': c.colorValue,
       'sort_order': c.sortOrder,
       'system_locked': c.systemLocked ? 1 : 0,
+      'archived': c.archived ? 1 : 0,
     };
     if (kIsWeb) {
-      if (_webExpenseCategories.any((m) => (m['name'] as String) == row['name'])) {
+      if (_webExpenseCategories
+          .any((m) => (m['name'] as String) == row['name'])) {
         throw StateError('duplicate_name');
       }
       final map = Map<String, dynamic>.from(row);
@@ -323,7 +351,8 @@ class DatabaseHelper {
     return await db.insert('expense_categories', row);
   }
 
-  Future<void> updateExpenseCategory(ExpenseCategory c, {required String previousName}) async {
+  Future<void> updateExpenseCategory(ExpenseCategory c,
+      {required String previousName}) async {
     if (c.id == null) return;
     final row = {
       'name': c.name.trim(),
@@ -331,6 +360,7 @@ class DatabaseHelper {
       'color': c.colorValue,
       'sort_order': c.sortOrder,
       'system_locked': c.systemLocked ? 1 : 0,
+      'archived': c.archived ? 1 : 0,
     };
     if (kIsWeb) {
       final idx = _webExpenseCategories.indexWhere((m) => m['id'] == c.id);
@@ -410,9 +440,25 @@ class DatabaseHelper {
     await db.delete('expense_categories', where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<void> setExpenseCategoryArchived(int id, bool archived) async {
+    if (kIsWeb) {
+      final idx = _webExpenseCategories.indexWhere((m) => m['id'] == id);
+      if (idx == -1) return;
+      _webExpenseCategories[idx]['archived'] = archived ? 1 : 0;
+      return;
+    }
+    final db = await _getDb();
+    await db.update(
+      'expense_categories',
+      {'archived': archived ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   // ── Accounts (banks / cash) ──
 
-  Future<List<AppAccount>> getAccounts() async {
+  Future<List<AppAccount>> getAccounts({bool includeArchived = false}) async {
     if (kIsWeb) {
       if (_webAccounts.isEmpty) {
         for (final a in buildSeededAccounts()) {
@@ -420,16 +466,23 @@ class DatabaseHelper {
             'id': _nextAccountId++,
             'name': a.name,
             'sort_order': a.sortOrder,
+            'archived': a.archived ? 1 : 0,
           });
         }
       }
       final sorted = List<Map<String, dynamic>>.from(_webAccounts)
+        ..removeWhere((m) =>
+            !includeArchived && ((m['archived'] as num?)?.toInt() ?? 0) == 1)
         ..sort((a, b) => ((a['sort_order'] as num?)?.toInt() ?? 0)
             .compareTo((b['sort_order'] as num?)?.toInt() ?? 0));
       return sorted.map((m) => AppAccount.fromMap(m)).toList();
     }
     final db = await _getDb();
-    final maps = await db.query('accounts', orderBy: 'sort_order ASC, name ASC');
+    final maps = await db.query(
+      'accounts',
+      where: includeArchived ? null : 'archived = 0',
+      orderBy: 'sort_order ASC, name ASC',
+    );
     return maps.map((m) => AppAccount.fromMap(m)).toList();
   }
 
@@ -437,6 +490,7 @@ class DatabaseHelper {
     final row = {
       'name': a.name.trim(),
       'sort_order': a.sortOrder,
+      'archived': a.archived ? 1 : 0,
     };
     if (kIsWeb) {
       if (_webAccounts.any((m) => (m['name'] as String) == row['name'])) {
@@ -451,11 +505,13 @@ class DatabaseHelper {
     return await db.insert('accounts', row);
   }
 
-  Future<void> updateAccount(AppAccount a, {required String previousName}) async {
+  Future<void> updateAccount(AppAccount a,
+      {required String previousName}) async {
     if (a.id == null) return;
     final row = {
       'name': a.name.trim(),
       'sort_order': a.sortOrder,
+      'archived': a.archived ? 1 : 0,
     };
     if (kIsWeb) {
       final idx = _webAccounts.indexWhere((m) => m['id'] == a.id);
@@ -578,6 +634,22 @@ class DatabaseHelper {
     await db.delete('accounts', where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<void> setAccountArchived(int id, bool archived) async {
+    if (kIsWeb) {
+      final idx = _webAccounts.indexWhere((m) => m['id'] == id);
+      if (idx == -1) return;
+      _webAccounts[idx]['archived'] = archived ? 1 : 0;
+      return;
+    }
+    final db = await _getDb();
+    await db.update(
+      'accounts',
+      {'archived': archived ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   /// Sum of all account balances: income credits; Received + transfer-in credit; other expenses debit.
   Future<double> getCumulativeAccountBalance() async {
     if (kIsWeb) {
@@ -625,8 +697,9 @@ class DatabaseHelper {
         if (acct.isEmpty) continue;
         final amt = amountPaisaFromMap(e['amount']);
         final cat = e['category'] as String? ?? '';
-        final delta =
-            ReportingCategoryNames.creditsExpenseAccountBalance(cat) ? amt : -amt;
+        final delta = ReportingCategoryNames.creditsExpenseAccountBalance(cat)
+            ? amt
+            : -amt;
         balances[acct] = (balances[acct] ?? 0) + delta;
       }
       for (final h in _webIncomeHistory) {
@@ -654,13 +727,11 @@ class DatabaseHelper {
     final balances = <String, int>{};
     for (final row in exp) {
       final name = row['account'] as String;
-      balances[name] =
-          (balances[name] ?? 0) + (row['t'] as num).toInt();
+      balances[name] = (balances[name] ?? 0) + (row['t'] as num).toInt();
     }
     for (final row in inc) {
       final name = row['account'] as String;
-      balances[name] =
-          (balances[name] ?? 0) + (row['t'] as num).toInt();
+      balances[name] = (balances[name] ?? 0) + (row['t'] as num).toInt();
     }
     return balances;
   }
@@ -691,7 +762,8 @@ class DatabaseHelper {
       return sorted.map((m) => Expense.fromMap(m)).toList();
     }
     final db = await _getDb();
-    final maps = await db.query('expenses', orderBy: 'date DESC, created_at DESC');
+    final maps =
+        await db.query('expenses', orderBy: 'date DESC, created_at DESC');
     return maps.map((m) => Expense.fromMap(m)).toList();
   }
 
@@ -762,16 +834,14 @@ class DatabaseHelper {
 
   Future<int> deleteExpense(int id) async {
     final existing = await getExpenseById(id);
-    final prefix = existing != null
-        ? parseTransferNotePrefix(existing.note)
-        : null;
+    final prefix =
+        existing != null ? parseTransferNotePrefix(existing.note) : null;
 
     if (kIsWeb) {
       final before = _webExpenses.length;
       if (prefix != null) {
         _webExpenses.removeWhere(
-          (m) =>
-              (m['note'] as String? ?? '').startsWith(prefix),
+          (m) => (m['note'] as String? ?? '').startsWith(prefix),
         );
       } else {
         _webExpenses.removeWhere((m) => m['id'] == id);
@@ -787,6 +857,32 @@ class DatabaseHelper {
       );
     }
     return await db.delete('expenses', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<List<Expense>> deleteExpenseAndGetDeleted(int id) async {
+    final existing = await getExpenseById(id);
+    if (existing == null) return const [];
+    final prefix = parseTransferNotePrefix(existing.note);
+    final deleted = prefix == null
+        ? [existing]
+        : (await getAllExpenses())
+            .where((e) => e.note.startsWith(prefix))
+            .toList();
+    await deleteExpense(id);
+    return deleted;
+  }
+
+  Future<void> restoreDeletedExpenses(List<Expense> expenses) async {
+    for (final expense in expenses) {
+      await insertExpense(Expense(
+        amount: expense.amount,
+        category: expense.category,
+        account: expense.account,
+        note: expense.note,
+        date: expense.date,
+        createdAt: expense.createdAt,
+      ));
+    }
   }
 
   // ── Income CRUD ──
@@ -820,8 +916,8 @@ class DatabaseHelper {
       }
     }
     final db = await _getDb();
-    final existing = await db.query('income',
-        where: 'month = ?', whereArgs: [income.month]);
+    final existing =
+        await db.query('income', where: 'month = ?', whereArgs: [income.month]);
     if (existing.isNotEmpty) {
       final oldAmount = amountPaisaFromMap(existing.first['amount']);
       final newAmount = oldAmount + income.amount;
@@ -850,7 +946,8 @@ class DatabaseHelper {
       final filtered = _webIncomeHistory
           .where((m) => m['month'] == month)
           .toList()
-        ..sort((a, b) => (b['created_at'] as String).compareTo(a['created_at'] as String));
+        ..sort((a, b) =>
+            (b['created_at'] as String).compareTo(a['created_at'] as String));
       return filtered.map((m) => IncomeEntry.fromMap(m)).toList();
     }
     final db = await _getDb();
@@ -866,7 +963,8 @@ class DatabaseHelper {
   Future<List<IncomeEntry>> getAllIncomeHistory() async {
     if (kIsWeb) {
       final sorted = List<Map<String, dynamic>>.from(_webIncomeHistory)
-        ..sort((a, b) => (b['created_at'] as String).compareTo(a['created_at'] as String));
+        ..sort((a, b) =>
+            (b['created_at'] as String).compareTo(a['created_at'] as String));
       return sorted.map((m) => IncomeEntry.fromMap(m)).toList();
     }
     final db = await _getDb();
@@ -884,7 +982,8 @@ class DatabaseHelper {
       }
     }
     final db = await _getDb();
-    final maps = await db.query('income_history', where: 'id = ?', whereArgs: [id]);
+    final maps =
+        await db.query('income_history', where: 'id = ?', whereArgs: [id]);
     if (maps.isEmpty) return null;
     return IncomeEntry.fromMap(maps.first);
   }
@@ -906,18 +1005,21 @@ class DatabaseHelper {
       return;
     }
     final db = await _getDb();
-    final maps = await db.query('income_history', where: 'month = ?', whereArgs: [month]);
+    final maps = await db
+        .query('income_history', where: 'month = ?', whereArgs: [month]);
     var total = 0;
     for (final m in maps) {
       total += (m['amount'] as num).toInt();
     }
-    final existing = await db.query('income', where: 'month = ?', whereArgs: [month]);
+    final existing =
+        await db.query('income', where: 'month = ?', whereArgs: [month]);
     if (total == 0) {
       if (existing.isNotEmpty) {
         await db.delete('income', where: 'month = ?', whereArgs: [month]);
       }
     } else if (existing.isNotEmpty) {
-      await db.update('income', {'amount': total}, where: 'month = ?', whereArgs: [month]);
+      await db.update('income', {'amount': total},
+          where: 'month = ?', whereArgs: [month]);
     } else {
       await db.insert('income', {'amount': total, 'month': month});
     }
@@ -978,6 +1080,24 @@ class DatabaseHelper {
     final db = await _getDb();
     await db.delete('income_history', where: 'id = ?', whereArgs: [id]);
     await _recomputeIncomeAggregateForMonth(month);
+  }
+
+  Future<IncomeEntry?> deleteIncomeHistoryEntryAndGetDeleted(int id) async {
+    final old = await getIncomeHistoryById(id);
+    if (old == null) return null;
+    await deleteIncomeHistoryEntry(id);
+    return old;
+  }
+
+  Future<void> restoreIncomeHistoryEntry(IncomeEntry entry) async {
+    await _insertIncomeHistory(IncomeEntry(
+      amount: entry.amount,
+      month: entry.month,
+      account: entry.account,
+      note: entry.note,
+      createdAt: entry.createdAt,
+    ));
+    await _recomputeIncomeAggregateForMonth(entry.month);
   }
 
   Future<Income?> getIncomeForMonth(String month) async {
@@ -1046,7 +1166,8 @@ class DatabaseHelper {
 
   /// Net balance brought into [month] for [account] (income_history with month \< M
   /// plus expenses on this account with date \< first day of [month]).
-  Future<double> getAccountCarryForwardForMonth(String account, String month) async {
+  Future<double> getAccountCarryForwardForMonth(
+      String account, String month) async {
     if (account.isEmpty) return 0;
     final firstDay = '$month-01';
     var fromIncomeHistoryPaisa = 0;
@@ -1109,7 +1230,8 @@ class DatabaseHelper {
   }
 
   /// Expenses and income on [account] in [month] (yyyy-MM), grouped by day (newest first).
-  Future<AccountMonthLedger> getAccountMonthLedger(String account, String month) async {
+  Future<AccountMonthLedger> getAccountMonthLedger(
+      String account, String month) async {
     if (account.isEmpty) {
       return const AccountMonthLedger(
         carryForward: 0,
@@ -1134,7 +1256,7 @@ class DatabaseHelper {
       if (ReportingCategoryNames.creditsExpenseAccountBalance(e.category)) {
         monthIncomePaisa += e.amount; // money coming IN
       } else {
-        monthSpentPaisa += e.amount;  // money going OUT
+        monthSpentPaisa += e.amount; // money going OUT
       }
     }
     for (final h in monthIncomeRows) {
@@ -1161,7 +1283,8 @@ class DatabaseHelper {
       final bucket = byDay[k]!;
       bucket.ex.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       bucket.inc.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return AccountLedgerDay(date: k, expenses: bucket.ex, incomeEntries: bucket.inc);
+      return AccountLedgerDay(
+          date: k, expenses: bucket.ex, incomeEntries: bucket.inc);
     }).toList();
 
     return AccountMonthLedger(
@@ -1227,7 +1350,7 @@ class DatabaseHelper {
     final expenses = await getAllExpenses();
     final incomeList = await _getAllIncome();
     final historyList = await _getAllIncomeHistory();
-    final categoryRows = await getExpenseCategories();
+    final categoryRows = await getExpenseCategories(includeArchived: true);
     final accountRows = await _getAllAccounts();
 
     final data = {
@@ -1237,6 +1360,7 @@ class DatabaseHelper {
           .map((m) => {
                 'name': m['name'],
                 'sort_order': m['sort_order'] ?? 0,
+                'archived': (m['archived'] as num?)?.toInt() ?? 0,
               })
           .toList(),
       'expense_categories': categoryRows
@@ -1246,17 +1370,20 @@ class DatabaseHelper {
                 'color': c.colorValue,
                 'sort_order': c.sortOrder,
                 'system_locked': c.systemLocked ? 1 : 0,
+                'archived': c.archived ? 1 : 0,
               })
           .toList(),
-      'expenses': expenses.map((e) => {
-        'amount_paisa': e.amount,
-        'amount': rupeesFromPaisa(e.amount),
-        'category': e.category,
-        'account': e.account,
-        'note': e.note,
-        'date': e.date,
-        'created_at': e.createdAt,
-      }).toList(),
+      'expenses': expenses
+          .map((e) => {
+                'amount_paisa': e.amount,
+                'amount': rupeesFromPaisa(e.amount),
+                'category': e.category,
+                'account': e.account,
+                'note': e.note,
+                'date': e.date,
+                'created_at': e.createdAt,
+              })
+          .toList(),
       'income': incomeList.map((m) {
         final p = amountPaisaFromMap(m['amount']);
         return {
@@ -1308,6 +1435,7 @@ class DatabaseHelper {
             'id': _nextAccountId++,
             'name': m['name'] as String,
             'sort_order': (m['sort_order'] as num?)?.toInt() ?? 0,
+            'archived': (m['archived'] as num?)?.toInt() ?? 0,
           });
         }
       } else {
@@ -1353,6 +1481,7 @@ class DatabaseHelper {
             'color': (m['color'] as num).toInt(),
             'sort_order': (m['sort_order'] as num?)?.toInt() ?? 0,
             'system_locked': (m['system_locked'] as num?)?.toInt() ?? 0,
+            'archived': (m['archived'] as num?)?.toInt() ?? 0,
           });
         }
       } else {
@@ -1376,6 +1505,7 @@ class DatabaseHelper {
           await txn.insert('accounts', {
             'name': m['name'] as String,
             'sort_order': (m['sort_order'] as num?)?.toInt() ?? 0,
+            'archived': (m['archived'] as num?)?.toInt() ?? 0,
           });
         }
       } else {
@@ -1403,6 +1533,7 @@ class DatabaseHelper {
             'color': (m['color'] as num).toInt(),
             'sort_order': (m['sort_order'] as num?)?.toInt() ?? 0,
             'system_locked': (m['system_locked'] as num?)?.toInt() ?? 0,
+            'archived': (m['archived'] as num?)?.toInt() ?? 0,
           });
         }
       } else {

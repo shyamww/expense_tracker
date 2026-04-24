@@ -11,12 +11,17 @@ import '../models/expense_category.dart';
 class CategoryProvider extends ChangeNotifier {
   final DatabaseHelper _db = DatabaseHelper();
 
-  List<ExpenseCategory> _categories = [];
-  List<ExpenseCategory> get categories => List.unmodifiable(_categories);
+  List<ExpenseCategory> _allCategories = [];
+  List<ExpenseCategory> get categories =>
+      List.unmodifiable(_allCategories.where((c) => !c.archived));
+  List<ExpenseCategory> get archivedCategories =>
+      List.unmodifiable(_allCategories.where((c) => c.archived));
 
   static const String kReceivedCategoryName = ReportingCategoryNames.received;
-  static const String kTransferOutCategoryName = ReportingCategoryNames.transferOut;
-  static const String kTransferInCategoryName = ReportingCategoryNames.transferIn;
+  static const String kTransferOutCategoryName =
+      ReportingCategoryNames.transferOut;
+  static const String kTransferInCategoryName =
+      ReportingCategoryNames.transferIn;
 
   static bool isTransferCategory(String c) =>
       ReportingCategoryNames.isTransferCategory(c);
@@ -25,14 +30,14 @@ class CategoryProvider extends ChangeNotifier {
       ReportingCategoryNames.countsAsSpendingInReports(c);
 
   Future<void> loadCategories({bool notify = true}) async {
-    _categories = await _db.getExpenseCategories();
+    _allCategories = await _db.getExpenseCategories(includeArchived: true);
     if (notify) notifyListeners();
   }
 
   void forceNotify() => notifyListeners();
 
   CategoryInfo resolveVisual(String name) {
-    for (final c in _categories) {
+    for (final c in _allCategories) {
       if (c.name == name) return c.toCategoryInfo();
     }
     return unknownCategoryInfo(name);
@@ -41,9 +46,9 @@ class CategoryProvider extends ChangeNotifier {
   Future<void> addCategory(ExpenseCategory draft) async {
     final name = draft.name.trim();
     if (name.isEmpty) return;
-    final order = _categories.isEmpty
+    final order = _allCategories.isEmpty
         ? 0
-        : _categories.map((e) => e.sortOrder).reduce(max) + 1;
+        : _allCategories.map((e) => e.sortOrder).reduce(max) + 1;
     final row = draft.copyWith(name: name, sortOrder: order);
     try {
       await _db.insertExpenseCategory(row);
@@ -89,6 +94,19 @@ class CategoryProvider extends ChangeNotifier {
       await _db.reassignExpensesCategory(fromName: c.name, toName: target);
     }
     await _db.deleteExpenseCategoryById(c.id!);
+    await loadCategories();
+  }
+
+  Future<void> archiveCategory(ExpenseCategory c) async {
+    if (c.systemLocked) throw StateError('locked_archive');
+    if (c.id == null) return;
+    await _db.setExpenseCategoryArchived(c.id!, true);
+    await loadCategories();
+  }
+
+  Future<void> restoreCategory(ExpenseCategory c) async {
+    if (c.id == null) return;
+    await _db.setExpenseCategoryArchived(c.id!, false);
     await loadCategories();
   }
 

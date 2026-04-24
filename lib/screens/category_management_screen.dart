@@ -22,7 +22,8 @@ class CategoryManagementScreen extends StatelessWidget {
       body: Consumer<CategoryProvider>(
         builder: (context, cat, _) {
           final list = cat.categories;
-          if (list.isEmpty) {
+          final archived = cat.archivedCategories;
+          if (list.isEmpty && archived.isEmpty) {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
@@ -51,56 +52,39 @@ class CategoryManagementScreen extends StatelessWidget {
               ),
             );
           }
-          return ListView.separated(
+          return ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
-            itemCount: list.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (context, i) {
-              final c = list[i];
-              final info = c.toCategoryInfo();
-              return Material(
-                color: scheme.surface,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: theme.dividerColor),
-                ),
-                child: ListTile(
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                  leading: CircleAvatar(
-                    backgroundColor: info.color.withValues(alpha: 0.15),
-                    child: Icon(info.icon, color: info.color, size: 22),
+            children: [
+              ...list.map((c) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _CategoryRow(
+                      category: c,
+                      onEdit: () => _openEditor(context, c),
+                      onArchive: c.systemLocked
+                          ? null
+                          : () => _archiveCategory(context, c),
+                    ),
+                  )),
+              if (archived.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Archived',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
-                  title: Text(c.name,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: c.systemLocked
-                      ? Text(
-                          'Used for money received (keep name)',
-                          style: TextStyle(
-                              fontSize: 12, color: scheme.onSurfaceVariant),
-                        )
-                      : null,
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined),
-                        tooltip: 'Edit',
-                        onPressed: () => _openEditor(context, c),
+                ),
+                const SizedBox(height: 8),
+                ...archived.map((c) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _CategoryRow(
+                        category: c,
+                        archived: true,
+                        onEdit: () => _openEditor(context, c),
+                        onArchive: () => _restoreCategory(context, c),
                       ),
-                      if (!c.systemLocked)
-                        IconButton(
-                          icon: Icon(Icons.delete_outline,
-                              color: Colors.red.shade400),
-                          tooltip: 'Delete',
-                          onPressed: () => _confirmDelete(context, c),
-                        ),
-                    ],
-                  ),
-                ),
-              );
-            },
+                    )),
+              ],
+            ],
           );
         },
       ),
@@ -125,120 +109,124 @@ class CategoryManagementScreen extends StatelessWidget {
     );
   }
 
-  static Future<void> _confirmDelete(
+  static Future<void> _archiveCategory(
       BuildContext context, ExpenseCategory c) async {
-    final cat = context.read<CategoryProvider>();
-    final count = await cat.expenseCountFor(c.name);
-    if (!context.mounted) return;
-
-    String? reassignTo;
-    if (count > 0) {
-      final others = cat.categories.where((x) => x.id != c.id).toList();
-      if (others.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                'Cannot delete: $count expense(s) and no other category to move them to.'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        return;
-      }
-      var targetCategory = others.first.name;
-      final picked = await showDialog<String>(
-        context: context,
-        builder: (dCtx) => StatefulBuilder(
-          builder: (context, setLocal) {
-            return AlertDialog(
-              title: const Text('Move expenses first'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$count expense(s) use "${c.name}". Choose a category to move them to:',
-                    style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: targetCategory,
-                    decoration: const InputDecoration(labelText: 'Move to'),
-                    items: others
-                        .map(
-                          (o) => DropdownMenuItem(
-                              value: o.name, child: Text(o.name)),
-                        )
-                        .toList(),
-                    onChanged: (v) {
-                      if (v != null) setLocal(() => targetCategory = v);
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(dCtx),
-                    child: const Text('Cancel')),
-                FilledButton(
-                  onPressed: () => Navigator.pop(dCtx, targetCategory),
-                  child: const Text('Delete'),
-                ),
-              ],
-            );
-          },
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('Archive category?'),
+        content: Text(
+          'Archive "${c.name}" so it no longer appears while adding expenses? Existing transactions will keep it.',
         ),
-      );
-      if (picked == null || picked.isEmpty) return;
-      reassignTo = picked;
-    } else {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (dCtx) => AlertDialog(
-          title: const Text('Delete category?'),
-          content: Text('Remove "${c.name}"? This cannot be undone.'),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(dCtx, false),
-                child: const Text('Cancel')),
-            FilledButton(
-              onPressed: () => Navigator.pop(dCtx, true),
-              style:
-                  FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
-              child: const Text('Delete'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dCtx, true),
+            child: const Text('Archive'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    await context.read<CategoryProvider>().archiveCategory(c);
+    if (!context.mounted) return;
+    await context.read<ExpenseProvider>().loadExpenses();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Archived "${c.name}"'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  static Future<void> _restoreCategory(
+      BuildContext context, ExpenseCategory c) async {
+    await context.read<CategoryProvider>().restoreCategory(c);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Restored "${c.name}"'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+}
+
+class _CategoryRow extends StatelessWidget {
+  final ExpenseCategory category;
+  final bool archived;
+  final VoidCallback onEdit;
+  final VoidCallback? onArchive;
+
+  const _CategoryRow({
+    required this.category,
+    required this.onEdit,
+    required this.onArchive,
+    this.archived = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final info = category.toCategoryInfo();
+    return Material(
+      color: scheme.surface,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: theme.dividerColor),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        leading: CircleAvatar(
+          backgroundColor: info.color.withValues(alpha: 0.15),
+          child: Icon(info.icon, color: info.color, size: 22),
+        ),
+        title: Text(
+          category.name,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: archived ? scheme.onSurfaceVariant : scheme.onSurface,
+          ),
+        ),
+        subtitle: category.systemLocked
+            ? Text(
+                'Used for money received (keep name)',
+                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+              )
+            : archived
+                ? Text(
+                    'Archived',
+                    style:
+                        TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+                  )
+                : null,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Edit',
+              onPressed: onEdit,
             ),
+            if (onArchive != null)
+              IconButton(
+                icon: Icon(
+                  archived ? Icons.unarchive_outlined : Icons.archive_outlined,
+                  color: archived ? scheme.primary : scheme.onSurfaceVariant,
+                ),
+                tooltip: archived ? 'Restore' : 'Archive',
+                onPressed: onArchive,
+              ),
           ],
         ),
-      );
-      if (ok != true) return;
-    }
-
-    if (!context.mounted) return;
-    final provider = context.read<CategoryProvider>();
-    final expenseProvider = context.read<ExpenseProvider>();
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      await provider.deleteCategory(c, reassignTo: reassignTo);
-      if (!context.mounted) return;
-      await expenseProvider.loadExpenses();
-      if (!context.mounted) return;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Deleted "${c.name}"'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } on StateError catch (e) {
-      if (!context.mounted) return;
-      final s = e.toString();
-      final msg = s.contains('reassign_required')
-          ? 'Pick a category to move expenses to.'
-          : s.contains('locked_delete')
-              ? 'This category cannot be deleted.'
-              : 'Could not delete category.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
-      );
-    }
+      ),
+    );
   }
 }
 

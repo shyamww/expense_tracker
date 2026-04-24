@@ -42,12 +42,23 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
     });
   }
 
-  Future<void> _onExpenseLongPress(BuildContext context, Expense expense) async {
+  Future<void> _onExpenseLongPress(
+      BuildContext context, Expense expense) async {
     if (expense.id == null) return;
     setState(() => _selectedExpenseId = expense.id);
     await showExpenseActionsBottomSheet(
       context: context,
       expense: expense,
+      onRefresh: () async {
+        final monthKey =
+            widget.date.length >= 7 ? widget.date.substring(0, 7) : '';
+        final expenseProvider = context.read<ExpenseProvider>();
+        final incomeProvider = context.read<IncomeProvider>();
+        await expenseProvider.loadExpenses();
+        if (monthKey.isNotEmpty && mounted) {
+          await incomeProvider.loadIncomeForMonth(monthKey);
+        }
+      },
       onClosed: () {
         if (mounted) setState(() => _selectedExpenseId = null);
       },
@@ -74,16 +85,18 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     final spentPaisa = dayExpenses
-        .where((e) => ReportingCategoryNames.countsAsSpendingInReports(e.category))
+        .where(
+            (e) => ReportingCategoryNames.countsAsSpendingInReports(e.category))
         .fold<int>(0, (sum, e) => sum + e.amount);
     final receivedFromExpPaisa = dayExpenses
-        .where((e) => ReportingCategoryNames.countsAsExternalReceived(e.category))
+        .where(
+            (e) => ReportingCategoryNames.countsAsExternalReceived(e.category))
         .fold<int>(0, (sum, e) => sum + e.amount);
     final incomeEntriesPaisa =
         dayIncome.fold<int>(0, (sum, e) => sum + e.amount);
     final totalSpent = rupeesFromPaisa(spentPaisa);
-    final totalReceived = rupeesFromPaisa(
-        receivedFromExpPaisa + incomeEntriesPaisa);
+    final totalReceived =
+        rupeesFromPaisa(receivedFromExpPaisa + incomeEntriesPaisa);
 
     final merged = <({String createdAt, Object item})>[];
     for (final e in dayExpenses) {
@@ -97,7 +110,9 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          parsed != null ? DateFormat('dd MMM yyyy').format(parsed) : widget.date,
+          parsed != null
+              ? DateFormat('dd MMM yyyy').format(parsed)
+              : widget.date,
         ),
         centerTitle: true,
       ),
@@ -118,7 +133,8 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
                 Row(
                   children: [
                     _buildStat('Spent', totalSpent, Colors.red.shade500),
-                    _buildStat('Received', totalReceived, Colors.green.shade600),
+                    _buildStat(
+                        'Received', totalReceived, Colors.green.shade600),
                     _buildStat(
                       'Net',
                       totalReceived - totalSpent,

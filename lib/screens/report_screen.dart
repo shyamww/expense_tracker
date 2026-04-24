@@ -392,6 +392,7 @@ class _CategoryTransactionsSheetState
     final changed = await showExpenseActionsBottomSheet(
       context: context,
       expense: expense,
+      onRefresh: widget.onChanged,
       onClosed: () async {
         if (mounted) {
           setState(() => _selectedExpenseId = null);

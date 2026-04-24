@@ -94,6 +94,17 @@ class ExpenseProvider extends ChangeNotifier {
     await loadExpenses();
   }
 
+  Future<List<Expense>> deleteExpenseWithUndoData(int id) async {
+    final deleted = await _dbHelper.deleteExpenseAndGetDeleted(id);
+    await loadExpenses();
+    return deleted;
+  }
+
+  Future<void> restoreDeletedExpenses(List<Expense> expenses) async {
+    await _dbHelper.restoreDeletedExpenses(expenses);
+    await loadExpenses();
+  }
+
   Future<List<Expense>> getExpensesByDateRange(String from, String to) async {
     return await _dbHelper.getExpensesByDateRange(from, to);
   }
@@ -128,9 +139,7 @@ class ExpenseProvider extends ChangeNotifier {
   }
 
   List<Expense> expensesForMonth(String monthPrefix) {
-    return _expenses
-        .where((e) => e.date.startsWith(monthPrefix))
-        .toList();
+    return _expenses.where((e) => e.date.startsWith(monthPrefix)).toList();
   }
 
   Map<String, List<Expense>> getExpensesGroupedByDay(String monthPrefix) {
@@ -146,15 +155,18 @@ class ExpenseProvider extends ChangeNotifier {
     return grouped;
   }
 
-  Map<String, ({double spent, double received})> getDailyTotals(String monthPrefix) {
+  Map<String, ({double spent, double received})> getDailyTotals(
+      String monthPrefix) {
     final Map<String, ({int spent, int received})> raw = {};
     for (final e in _expenses) {
       if (!e.date.startsWith(monthPrefix)) continue;
       final current = raw[e.date] ?? (spent: 0, received: 0);
       if (ReportingCategoryNames.countsAsExternalReceived(e.category)) {
-        raw[e.date] = (spent: current.spent, received: current.received + e.amount);
+        raw[e.date] =
+            (spent: current.spent, received: current.received + e.amount);
       } else if (ReportingCategoryNames.countsAsSpendingInReports(e.category)) {
-        raw[e.date] = (spent: current.spent + e.amount, received: current.received);
+        raw[e.date] =
+            (spent: current.spent + e.amount, received: current.received);
       }
     }
     return {
@@ -166,7 +178,8 @@ class ExpenseProvider extends ChangeNotifier {
     };
   }
 
-  Future<Map<String, ({double spent, double received})>> getMonthlyTotalsForYear(int year) async {
+  Future<Map<String, ({double spent, double received})>>
+      getMonthlyTotalsForYear(int year) async {
     final yearExpenses = await _dbHelper.getExpensesForYear(year);
     final Map<String, ({double spent, double received})> totals = {};
 
@@ -178,7 +191,8 @@ class ExpenseProvider extends ChangeNotifier {
         if (e.date.startsWith(monthKey)) {
           if (ReportingCategoryNames.countsAsExternalReceived(e.category)) {
             receivedPaisa += e.amount;
-          } else if (ReportingCategoryNames.countsAsSpendingInReports(e.category)) {
+          } else if (ReportingCategoryNames.countsAsSpendingInReports(
+              e.category)) {
             spentPaisa += e.amount;
           }
         }

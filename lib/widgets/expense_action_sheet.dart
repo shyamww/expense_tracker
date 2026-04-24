@@ -16,6 +16,7 @@ Future<bool> showExpenseActionsBottomSheet({
 
   /// When set, edit screen keeps this account (e.g. from account ledger).
   String? lockAccountTo,
+  Future<void> Function()? onRefresh,
   VoidCallback? onClosed,
 }) async {
   if (expense.id == null) return false;
@@ -98,6 +99,7 @@ Future<bool> showExpenseActionsBottomSheet({
       );
       changed = true;
     } else if (action == ExpenseActionSheetResult.delete) {
+      final messenger = ScaffoldMessenger.of(context);
       final isXfer = CategoryProvider.isTransferCategory(expense.category);
       final confirmed = await showDialog<bool>(
         context: context,
@@ -123,7 +125,36 @@ Future<bool> showExpenseActionsBottomSheet({
         ),
       );
       if (confirmed == true && context.mounted) {
-        await context.read<ExpenseProvider>().deleteExpense(expense.id!);
+        final deleted = await context
+            .read<ExpenseProvider>()
+            .deleteExpenseWithUndoData(expense.id!);
+        final refresh = onRefresh;
+        if (refresh != null && context.mounted) {
+          await refresh();
+        }
+        if (deleted.isNotEmpty && context.mounted) {
+          messenger.hideCurrentSnackBar();
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                deleted.length > 1 ? 'Transfer deleted' : 'Transaction deleted',
+              ),
+              behavior: SnackBarBehavior.floating,
+              action: SnackBarAction(
+                label: 'Undo',
+                onPressed: () async {
+                  await context
+                      .read<ExpenseProvider>()
+                      .restoreDeletedExpenses(deleted);
+                  final refresh = onRefresh;
+                  if (refresh != null && context.mounted) {
+                    await refresh();
+                  }
+                },
+              ),
+            ),
+          );
+        }
         changed = true;
       }
     }

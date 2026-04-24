@@ -270,6 +270,13 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
       context: context,
       expense: expense,
       lockAccountTo: widget.accountName,
+      onRefresh: () async {
+        final expenseProv = context.read<ExpenseProvider>();
+        final accountProv = context.read<AccountProvider>();
+        await expenseProv.loadExpenses();
+        await accountProv.refresh();
+        await _loadLedger();
+      },
       onClosed: () async {
         if (!mounted) return;
         final expenseProv = context.read<ExpenseProvider>();

@@ -249,6 +249,7 @@ class _IncomeScreenState extends State<IncomeScreen> {
     await showExpenseActionsBottomSheet(
       context: context,
       expense: expense,
+      onRefresh: _loadData,
       onClosed: () async {
         if (!mounted) return;
         setState(() => _selectedExpenseId = null);

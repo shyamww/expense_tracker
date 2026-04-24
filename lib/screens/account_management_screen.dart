@@ -35,7 +35,8 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
       body: Consumer<AccountProvider>(
         builder: (context, ap, _) {
           final list = ap.accounts;
-          if (list.isEmpty) {
+          final archived = ap.archivedAccounts;
+          if (list.isEmpty && archived.isEmpty) {
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
@@ -64,48 +65,37 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
               ),
             );
           }
-          return ListView.separated(
+          return ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
-            itemCount: list.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (context, i) {
-              final a = list[i];
-              return Material(
-                color: scheme.surface,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: theme.dividerColor),
-                ),
-                child: ListTile(
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                  leading: CircleAvatar(
-                    backgroundColor: scheme.primaryContainer,
-                    child: Icon(Icons.account_balance_rounded,
-                        color: scheme.primary, size: 22),
-                  ),
-                  title: Text(a.name,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined),
-                        tooltip: 'Edit',
-                        onPressed: () => _openEditor(context, a),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.delete_outline,
-                            color: Colors.red.shade400),
-                        tooltip: 'Delete',
-                        onPressed: () => _confirmDelete(context, a),
-                      ),
-                    ],
+            children: [
+              ...list.map((a) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _AccountRow(
+                      account: a,
+                      onEdit: () => _openEditor(context, a),
+                      onArchive: () => _archiveAccount(context, a),
+                    ),
+                  )),
+              if (archived.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Archived',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              );
-            },
+                const SizedBox(height: 8),
+                ...archived.map((a) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _AccountRow(
+                        account: a,
+                        archived: true,
+                        onEdit: () => _openEditor(context, a),
+                        onArchive: () => _restoreAccount(context, a),
+                      ),
+                    )),
+              ],
+            ],
           );
         },
       ),
@@ -129,122 +119,113 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context, AppAccount a) async {
-    final accountProv = context.read<AccountProvider>();
-    final expenseProv = context.read<ExpenseProvider>();
-    final incomeProv = context.read<IncomeProvider>();
-    final messenger = ScaffoldMessenger.of(context);
-    final expCount = await accountProv.expenseCountFor(a.name);
-    final incCount = await accountProv.incomeHistoryCountFor(a.name);
-    if (!context.mounted) return;
-
-    String? reassignTo;
-    if (expCount + incCount > 0) {
-      final others = accountProv.accounts.where((x) => x.id != a.id).toList();
-      if (others.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Cannot delete: $expCount expense(s) and $incCount income row(s), and no other account to move them to.',
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-        return;
-      }
-      var targetAccount = others.first.name;
-      final picked = await showDialog<String>(
-        context: context,
-        builder: (dCtx) => StatefulBuilder(
-          builder: (context, setLocal) {
-            return AlertDialog(
-              title: const Text('Move transactions first'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$expCount expense(s) and $incCount income entr${incCount == 1 ? 'y' : 'ies'} use "${a.name}". Choose an account to reassign them to:',
-                    style: TextStyle(color: Colors.grey.shade700, fontSize: 14),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: targetAccount,
-                    decoration: const InputDecoration(labelText: 'Move to'),
-                    items: others
-                        .map(
-                          (o) => DropdownMenuItem(
-                              value: o.name, child: Text(o.name)),
-                        )
-                        .toList(),
-                    onChanged: (v) {
-                      if (v != null) setLocal(() => targetAccount = v);
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(dCtx),
-                    child: const Text('Cancel')),
-                FilledButton(
-                  onPressed: () => Navigator.pop(dCtx, targetAccount),
-                  child: const Text('Delete'),
-                ),
-              ],
-            );
-          },
+  Future<void> _archiveAccount(BuildContext context, AppAccount a) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dCtx) => AlertDialog(
+        title: const Text('Archive account?'),
+        content: Text(
+          'Archive "${a.name}" so it no longer appears in account pickers? Existing transactions will keep it.',
         ),
-      );
-      if (picked == null || picked.isEmpty) return;
-      reassignTo = picked;
-    } else {
-      final ok = await showDialog<bool>(
-        context: context,
-        builder: (dCtx) => AlertDialog(
-          title: const Text('Delete account?'),
-          content: Text('Remove "${a.name}"? This cannot be undone.'),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(dCtx, false),
-                child: const Text('Cancel')),
-            FilledButton(
-              onPressed: () => Navigator.pop(dCtx, true),
-              style:
-                  FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
-              child: const Text('Delete'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dCtx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dCtx, true),
+            child: const Text('Archive'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    await context.read<AccountProvider>().archiveAccount(a);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Archived "${a.name}"'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _restoreAccount(BuildContext context, AppAccount a) async {
+    await context.read<AccountProvider>().restoreAccount(a);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Restored "${a.name}"'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+}
+
+class _AccountRow extends StatelessWidget {
+  final AppAccount account;
+  final bool archived;
+  final VoidCallback onEdit;
+  final VoidCallback onArchive;
+
+  const _AccountRow({
+    required this.account,
+    required this.onEdit,
+    required this.onArchive,
+    this.archived = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Material(
+      color: scheme.surface,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: theme.dividerColor),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        leading: CircleAvatar(
+          backgroundColor: scheme.primaryContainer,
+          child: Icon(Icons.account_balance_rounded,
+              color: scheme.primary, size: 22),
+        ),
+        title: Text(
+          account.name,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: archived ? scheme.onSurfaceVariant : scheme.onSurface,
+          ),
+        ),
+        subtitle: archived
+            ? Text(
+                'Archived',
+                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+              )
+            : null,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Edit',
+              onPressed: onEdit,
+            ),
+            IconButton(
+              icon: Icon(
+                archived ? Icons.unarchive_outlined : Icons.archive_outlined,
+                color: archived ? scheme.primary : scheme.onSurfaceVariant,
+              ),
+              tooltip: archived ? 'Restore' : 'Archive',
+              onPressed: onArchive,
             ),
           ],
         ),
-      );
-      if (ok != true) return;
-    }
-
-    try {
-      await accountProv.deleteAccount(a, reassignTo: reassignTo);
-      if (!context.mounted) return;
-      await expenseProv.loadExpenses();
-      if (!context.mounted) return;
-      await incomeProv.loadIncomeForCurrentMonth();
-      if (!context.mounted) return;
-      await accountProv.refresh();
-      if (!context.mounted) return;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Deleted "${a.name}"'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } on StateError catch (e) {
-      if (!context.mounted) return;
-      final s = e.toString();
-      final msg = s.contains('reassign_required')
-          ? 'Pick an account to move transactions to.'
-          : 'Could not delete account.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
-      );
-    }
+      ),
+    );
   }
 }
 
