@@ -155,7 +155,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary,
+                  color: scheme.primary,
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Row(
@@ -163,29 +163,38 @@ class _ReportScreenState extends State<ReportScreen> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
+                        color: scheme.onPrimary.withValues(alpha: 0.14),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(Icons.trending_down,
-                          color: Colors.white, size: 18),
+                      child: Icon(
+                        Icons.trending_down,
+                        color: scheme.onPrimary,
+                        size: 18,
+                      ),
                     ),
                     const SizedBox(width: 10),
-                    const Text(
+                    Text(
                       'Spending',
-                      style: TextStyle(color: Colors.white70),
+                      style: theme.textTheme.titleSmall!.copyWith(
+                        color: scheme.onPrimary,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const Spacer(),
                     Text(
                       '₹ ${formatRupeesTwoDecimalsFromDouble(_total)}',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: theme.textTheme.titleMedium!.copyWith(
+                        color: scheme.onPrimary,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       '${_filteredExpenses.length}',
-                      style: const TextStyle(color: Colors.white60),
+                      style: theme.textTheme.bodyMedium!.copyWith(
+                        color: scheme.onPrimary.withValues(alpha: 0.85),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
