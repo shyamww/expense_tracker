@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:fl_chart/fl_chart.dart';
 import '../core/money.dart';
 import '../providers/expense_provider.dart';
 import '../models/expense.dart';
@@ -9,6 +8,7 @@ import '../constants/reporting_category_names.dart';
 import '../providers/category_provider.dart';
 import '../widgets/expense_action_sheet.dart';
 import '../widgets/expense_tile.dart';
+import '../widgets/report_spending_pie.dart';
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({super.key});
@@ -203,14 +203,14 @@ class _ReportScreenState extends State<ReportScreen> {
               /// PIE CHART
               if (_categoryTotals.isNotEmpty) ...[
                 const SizedBox(height: 22),
-                SizedBox(
-                  height: 220,
-                  child: PieChart(
-                    PieChartData(
-                      sectionsSpace: 3,
-                      centerSpaceRadius: 45,
-                      sections: _buildPieChartSections(),
-                    ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 10,
+                  ),
+                  child: ReportSpendingPie(
+                    categoryTotals: _categoryTotals,
+                    resolveVisual: catProv.resolveVisual,
                   ),
                 ),
 
@@ -352,25 +352,6 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  List<PieChartSectionData> _buildPieChartSections() {
-    final catProv = context.read<CategoryProvider>();
-
-    return _categoryTotals.entries.map((entry) {
-      final info = catProv.resolveVisual(entry.key);
-      final percentage = _total > 0 ? (entry.value / _total * 100) : 0.0;
-
-      return PieChartSectionData(
-        value: entry.value,
-        color: info.color,
-        radius: 55,
-        title: '${percentage.toStringAsFixed(0)}%',
-        titleStyle: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-    }).toList();
-  }
 }
 
 class _CategoryTransactionsSheet extends StatefulWidget {
