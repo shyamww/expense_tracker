@@ -112,7 +112,7 @@ class _LockScreenState extends State<LockScreen> {
               Text(
                 'Enter your 4-digit PIN',
                 style: theme.textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey.shade600,
+                  color: scheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 32),
@@ -127,7 +127,9 @@ class _LockScreenState extends State<LockScreen> {
                     height: 12,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: filled ? scheme.primary : Colors.grey.shade300,
+                      color: filled
+                          ? scheme.primary
+                          : scheme.outline.withValues(alpha: 0.45),
                     ),
                   );
                 }),
@@ -159,9 +161,12 @@ class _LockScreenState extends State<LockScreen> {
               ),
               const Spacer(flex: 2),
               if (_busy)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 24),
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 24),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: scheme.primary,
+                  ),
                 )
               else ...[
                 _Keypad(
@@ -192,6 +197,7 @@ class _Keypad extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       children: [
         for (final row in [
@@ -208,6 +214,8 @@ class _Keypad extends StatelessWidget {
                     (d) => _KeyButton(
                       label: d,
                       onTap: () => onDigit(d),
+                      keyFill: scheme.surfaceContainerHighest,
+                      foreground: scheme.onSurface,
                     ),
                   )
                   .toList(),
@@ -222,12 +230,21 @@ class _Keypad extends StatelessWidget {
                   ? _KeyButton(
                       icon: Icons.fingerprint_rounded,
                       onTap: () => onBiometric!(),
+                      keyFill: scheme.surfaceContainerHighest,
+                      foreground: scheme.onSurfaceVariant,
                     )
                   : const SizedBox(width: 72, height: 72),
-              _KeyButton(label: '0', onTap: () => onDigit('0')),
+              _KeyButton(
+                label: '0',
+                onTap: () => onDigit('0'),
+                keyFill: scheme.surfaceContainerHighest,
+                foreground: scheme.onSurface,
+              ),
               _KeyButton(
                 icon: Icons.backspace_outlined,
                 onTap: onBackspace,
+                keyFill: scheme.surfaceContainerHighest,
+                foreground: scheme.onSurfaceVariant,
               ),
             ],
           ),
@@ -238,17 +255,24 @@ class _Keypad extends StatelessWidget {
 }
 
 class _KeyButton extends StatelessWidget {
-  const _KeyButton({this.label, this.icon, required this.onTap})
-      : assert(label != null || icon != null);
+  const _KeyButton({
+    this.label,
+    this.icon,
+    required this.onTap,
+    required this.keyFill,
+    required this.foreground,
+  }) : assert(label != null || icon != null);
 
   final String? label;
   final IconData? icon;
   final VoidCallback onTap;
+  final Color keyFill;
+  final Color foreground;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: keyFill,
       shape: const CircleBorder(),
       elevation: 0,
       child: InkWell(
@@ -261,12 +285,13 @@ class _KeyButton extends StatelessWidget {
             child: label != null
                 ? Text(
                     label!,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w600,
+                      color: foreground,
                     ),
                   )
-                : Icon(icon, size: 28, color: Colors.grey.shade800),
+                : Icon(icon, size: 28, color: foreground),
           ),
         ),
       ),

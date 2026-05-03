@@ -8,6 +8,7 @@ import '../providers/category_provider.dart';
 import '../providers/account_provider.dart';
 import '../widgets/category_chip.dart';
 import '../widgets/account_chip.dart';
+import '../services/add_expense_prefs.dart';
 
 class AddExpenseScreen extends StatefulWidget {
   final Expense? expenseToEdit;
@@ -72,6 +73,43 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       final ap = context.read<AccountProvider>();
       await ap.refresh();
       if (!mounted) return;
+
+      if (_isEditing) return;
+
+      final remembered = await AddExpensePrefs.load();
+      if (!mounted) return;
+
+      final accountNames = ap.accounts.map((a) => a.name).toSet();
+      final categoryNames = cp.categories
+          .where((c) => !CategoryProvider.isTransferCategory(c.name))
+          .map((c) => c.name)
+          .toSet();
+
+      setState(() {
+        if (remembered.transferMode &&
+            accountNames.length >= 2 &&
+            remembered.transferFrom != null &&
+            remembered.transferTo != null &&
+            accountNames.contains(remembered.transferFrom) &&
+            accountNames.contains(remembered.transferTo) &&
+            remembered.transferFrom != remembered.transferTo) {
+          _transferMode = true;
+          _transferFrom = remembered.transferFrom;
+          _transferTo = remembered.transferTo;
+          _selectedAccount = null;
+        } else {
+          final cat = remembered.category;
+          if (cat != null && categoryNames.contains(cat)) {
+            _selectedCategory = cat;
+          }
+          if (!_accountLocked) {
+            final acc = remembered.account;
+            if (acc != null && accountNames.contains(acc)) {
+              _selectedAccount = acc;
+            }
+          }
+        }
+      });
     });
   }
 
@@ -159,6 +197,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
         createdAtIso: when.toIso8601String(),
         userNote: _noteController.text.trim(),
       );
+      if (!_isEditing) {
+        await AddExpensePrefs.saveTransferSelection(
+          fromAccount: from,
+          toAccount: to,
+        );
+      }
       if (!mounted) return;
       await accountProvider.refresh();
       if (!mounted) return;
@@ -192,6 +236,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       await provider.updateExpense(expense);
     } else {
       await provider.addExpense(expense);
+      await AddExpensePrefs.saveExpenseSelection(
+        category: _selectedCategory!,
+        account: accountName,
+      );
     }
 
     if (!mounted) return;
