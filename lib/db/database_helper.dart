@@ -1405,10 +1405,11 @@ class DatabaseHelper {
       }).toList(),
     };
 
-    return jsonEncode(data);
+    return base64Encode(utf8.encode(jsonEncode(data)));
   }
 
-  Future<void> importFromJson(String jsonString) async {
+  Future<void> importFromJson(String encoded) async {
+    final jsonString = utf8.decode(base64Decode(encoded.trim()));
     final data = jsonDecode(jsonString) as Map<String, dynamic>;
     final expensesList = data['expenses'] as List<dynamic>? ?? [];
     final incomeList = data['income'] as List<dynamic>? ?? [];

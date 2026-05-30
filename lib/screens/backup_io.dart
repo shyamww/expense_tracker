@@ -23,7 +23,7 @@ Rect _sharePositionOrigin(BuildContext context) {
 Future<void> shareBackup(BuildContext context, String jsonString) async {
   final tempDir = Directory.systemTemp;
   final timestamp = DateTime.now().millisecondsSinceEpoch;
-  final file = File(p.join(tempDir.path, 'expense_backup_$timestamp.json'));
+  final file = File(p.join(tempDir.path, 'expense_backup_$timestamp.bak'));
   await file.writeAsString(jsonString);
 
   await Share.shareXFiles(

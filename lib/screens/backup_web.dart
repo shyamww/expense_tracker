@@ -6,11 +6,11 @@ import 'package:flutter/material.dart';
 
 Future<void> shareBackup(BuildContext context, String jsonString) async {
   final bytes = utf8.encode(jsonString);
-  final blob = html.Blob([bytes], 'application/json');
+  final blob = html.Blob([bytes], 'application/octet-stream');
   final url = html.Url.createObjectUrlFromBlob(blob);
 
   final anchor = html.AnchorElement(href: url)
-    ..setAttribute('download', 'expense_backup.json')
+    ..setAttribute('download', 'expense_backup.bak')
     ..click();
 
   html.Url.revokeObjectUrl(url);
