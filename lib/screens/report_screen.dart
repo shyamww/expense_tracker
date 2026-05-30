@@ -1,6 +1,12 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 import '../core/money.dart';
 import '../providers/expense_provider.dart';
 import '../models/expense.dart';
@@ -18,6 +24,8 @@ class ReportScreen extends StatefulWidget {
 }
 
 class _ReportScreenState extends State<ReportScreen> {
+  final GlobalKey _reportKey = GlobalKey();
+
   DateTime _fromDate = DateTime(DateTime.now().year, DateTime.now().month, 1);
   DateTime _toDate = DateTime.now();
 
@@ -76,6 +84,38 @@ class _ReportScreenState extends State<ReportScreen> {
     });
   }
 
+  Future<void> _shareReportToWhatsApp() async {
+    try {
+      final boundary = _reportKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      if (boundary == null) return;
+
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return;
+
+      final pngBytes = byteData.buffer.asUint8List();
+
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/expense_report.png');
+      await file.writeAsBytes(pngBytes);
+
+      final from = DateFormat('dd MMM yyyy').format(_fromDate);
+      final to = DateFormat('dd MMM yyyy').format(_toDate);
+
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Expense Report ($from – $to)\nTotal Spending: ₹${formatRupeesTwoDecimalsFromDouble(_total)}',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to share report')),
+        );
+      }
+    }
+  }
+
   Future<void> _openCategoryTransactions(String category) async {
     final matchingExpenses = _filteredExpenses
         .where((expense) => expense.category == category)
@@ -107,6 +147,14 @@ class _ReportScreenState extends State<ReportScreen> {
       appBar: AppBar(
         title: const Text('Reports'),
         centerTitle: true,
+        actions: [
+          if (_hasSearched && _categoryTotals.isNotEmpty)
+            IconButton(
+              onPressed: _shareReportToWhatsApp,
+              icon: const Icon(Icons.share),
+              tooltip: 'Share report',
+            ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(18),
@@ -150,181 +198,198 @@ class _ReportScreenState extends State<ReportScreen> {
             if (_hasSearched) ...[
               const SizedBox(height: 18),
 
-              /// 🔥 ULTRA COMPACT BAR
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: scheme.primary,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: scheme.onPrimary.withValues(alpha: 0.14),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(
-                        Icons.trending_down,
-                        color: scheme.onPrimary,
-                        size: 18,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Spending',
-                      style: theme.textTheme.titleSmall!.copyWith(
-                        color: scheme.onPrimary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      '₹ ${formatRupeesTwoDecimalsFromDouble(_total)}',
-                      style: theme.textTheme.titleMedium!.copyWith(
-                        color: scheme.onPrimary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${_filteredExpenses.length}',
-                      style: theme.textTheme.bodyMedium!.copyWith(
-                        color: scheme.onPrimary.withValues(alpha: 0.85),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              /// PIE CHART
-              if (_categoryTotals.isNotEmpty) ...[
-                const SizedBox(height: 22),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 10,
-                  ),
-                  child: ReportSpendingPie(
-                    categoryTotals: _categoryTotals,
-                    resolveVisual: catProv.resolveVisual,
-                  ),
-                ),
-
-                const SizedBox(height: 18),
-
-                /// 🔥 CATEGORY CARDS (FINAL DESIGN)
-                ..._categoryTotals.entries.map((entry) {
-                  final info = catProv.resolveVisual(entry.key);
-                  final percentage =
-                      _total > 0 ? (entry.value / _total * 100) : 0.0;
-
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: Material(
-                      color: scheme.surface,
-                      borderRadius: BorderRadius.circular(18),
-                      child: InkWell(
-                        onTap: () => _openCategoryTransactions(entry.key),
-                        borderRadius: BorderRadius.circular(18),
-                        child: Ink(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: theme.dividerColor,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.03),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 50,
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  color: info.color.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Icon(info.icon,
-                                    color: info.color, size: 24),
-                              ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      entry.key,
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Tap to view transactions',
-                                      style: TextStyle(
-                                        color: scheme.onSurfaceVariant,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 10),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(6),
-                                      child: LinearProgressIndicator(
-                                        value: percentage / 100,
-                                        minHeight: 6,
-                                        backgroundColor: theme.dividerColor,
-                                        color:
-                                            info.color.withValues(alpha: 0.9),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 14),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    '₹ ${formatRupeesTwoDecimalsFromDouble(entry.value)}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${percentage.toStringAsFixed(1)}%',
-                                    style: TextStyle(
-                                      color: scheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
+              RepaintBoundary(
+                key: _reportKey,
+                child: Container(
+                  color: scheme.surface,
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      /// Date range header for the captured image
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          '${DateFormat('dd MMM yyyy').format(_fromDate)} – ${DateFormat('dd MMM yyyy').format(_toDate)}',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
                           ),
                         ),
                       ),
-                    ),
-                  );
-                }),
-              ],
 
-              if (_categoryTotals.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(top: 40),
-                  child: Center(child: Text('No expenses found')),
+                      /// ULTRA COMPACT BAR
+                      Container(
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: scheme.primary,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: scheme.onPrimary.withValues(alpha: 0.14),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                Icons.trending_down,
+                                color: scheme.onPrimary,
+                                size: 18,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              'Spending',
+                              style: theme.textTheme.titleSmall!.copyWith(
+                                color: scheme.onPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              '₹ ${formatRupeesTwoDecimalsFromDouble(_total)}',
+                              style: theme.textTheme.titleMedium!.copyWith(
+                                color: scheme.onPrimary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${_filteredExpenses.length}',
+                              style: theme.textTheme.bodyMedium!.copyWith(
+                                color: scheme.onPrimary.withValues(alpha: 0.85),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      /// PIE CHART
+                      if (_categoryTotals.isNotEmpty) ...[
+                        const SizedBox(height: 22),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 10,
+                          ),
+                          child: ReportSpendingPie(
+                            categoryTotals: _categoryTotals,
+                            resolveVisual: catProv.resolveVisual,
+                          ),
+                        ),
+
+                        const SizedBox(height: 18),
+
+                        /// CATEGORY CARDS
+                        ..._categoryTotals.entries.map((entry) {
+                          final info = catProv.resolveVisual(entry.key);
+                          final percentage =
+                              _total > 0 ? (entry.value / _total * 100) : 0.0;
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 14),
+                            child: Material(
+                              color: scheme.surface,
+                              borderRadius: BorderRadius.circular(18),
+                              child: InkWell(
+                                onTap: () => _openCategoryTransactions(entry.key),
+                                borderRadius: BorderRadius.circular(18),
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: theme.dividerColor,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 50,
+                                        height: 50,
+                                        decoration: BoxDecoration(
+                                          color: info.color.withValues(alpha: 0.12),
+                                          borderRadius: BorderRadius.circular(14),
+                                        ),
+                                        child: Icon(info.icon,
+                                            color: info.color, size: 24),
+                                      ),
+                                      const SizedBox(width: 14),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              entry.key,
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'Tap to view transactions',
+                                              style: TextStyle(
+                                                color: scheme.onSurfaceVariant,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 10),
+                                            ClipRRect(
+                                              borderRadius: BorderRadius.circular(6),
+                                              child: LinearProgressIndicator(
+                                                value: percentage / 100,
+                                                minHeight: 6,
+                                                backgroundColor: theme.dividerColor,
+                                                color:
+                                                    info.color.withValues(alpha: 0.9),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 14),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            '₹ ${formatRupeesTwoDecimalsFromDouble(entry.value)}',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '${percentage.toStringAsFixed(1)}%',
+                                            style: TextStyle(
+                                              color: scheme.onSurfaceVariant,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+
+                      if (_categoryTotals.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 40),
+                          child: Center(child: Text('No expenses found')),
+                        ),
+                    ],
+                  ),
                 ),
+              ),
+
             ]
           ],
         ),
