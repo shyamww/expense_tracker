@@ -38,7 +38,7 @@ class _FeedbackFormSheetState extends State<FeedbackFormSheet> {
         widget.scaffoldMessenger.showSnackBar(
           const SnackBar(
             content: Text(
-              'Set kWeb3FormsAccessKey in lib/constants/feedback_config.dart, then rebuild.',
+              'Build with --dart-define=WEB3FORMS_ACCESS_KEY=your-key, then try again.',
             ),
             behavior: SnackBarBehavior.floating,
           ),

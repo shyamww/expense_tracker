@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:http/http.dart' as http;
 
 import '../constants/feedback_config.dart';
@@ -36,21 +35,16 @@ class FeedbackSubmitter {
     String? replyEmail,
   }) async {
     if (!isConfigured) {
-      debugPrint(
-          '[Feedback] isConfigured=false (check key length & placeholder)');
       return const FeedbackSendOutcome(FeedbackSendResult.notConfigured);
     }
 
     final trimmed = message.trim();
     if (trimmed.isEmpty) {
-      debugPrint('[Feedback] Empty message');
       return const FeedbackSendOutcome(
         FeedbackSendResult.rejected,
         'Please enter a message.',
       );
     }
-
-    debugPrint('[Feedback] POST $_endpoint (message len=${trimmed.length})');
 
     final body = <String, dynamic>{
       'access_key': kWeb3FormsAccessKey.trim(),
@@ -75,21 +69,15 @@ class FeedbackSubmitter {
           )
           .timeout(const Duration(seconds: 25));
 
-      debugPrint(
-          '[Feedback] HTTP ${res.statusCode} body=${_truncate(res.body)}');
-
       if (res.statusCode == 200) {
         try {
           final map = jsonDecode(res.body) as Map<String, dynamic>;
           if (map['success'] == true) {
-            debugPrint('[Feedback] Web3Forms success');
             return const FeedbackSendOutcome(FeedbackSendResult.success);
           }
           final msg = _parseWeb3FormsMessage(map);
-          debugPrint('[Feedback] Web3Forms success=false: $msg');
           return FeedbackSendOutcome(FeedbackSendResult.rejected, msg);
         } catch (e) {
-          debugPrint('[Feedback] JSON parse error: $e');
           return const FeedbackSendOutcome(
             FeedbackSendResult.rejected,
             'Unexpected response from server.',
@@ -97,14 +85,11 @@ class FeedbackSubmitter {
         }
       }
 
-      debugPrint('[Feedback] Non-200 status');
       return FeedbackSendOutcome(
         FeedbackSendResult.rejected,
         'Server returned ${res.statusCode}. ${_truncate(res.body)}',
       );
-    } catch (e, st) {
-      debugPrint('[Feedback] Exception: $e');
-      debugPrint('[Feedback] Stack: $st');
+    } catch (e) {
       final es = e.toString();
       final blocked = es.contains('Failed host lookup') ||
           es.contains('SocketException') ||

@@ -804,128 +804,146 @@ class _HomeScreenState extends State<HomeScreen>
         _dailyActivityDateKeys(expenseProvider, incomeProvider);
     final allDailyCollapsed = dailyDateKeys.isNotEmpty &&
         dailyDateKeys.every(_collapsedDates.contains);
+    final isCalendarTab = _tabController.index == 1;
     final showBulkCollapse =
         _tabController.index == 0 && dailyDateKeys.isNotEmpty;
 
-    return Expanded(
-      child: Container(
-        decoration: BoxDecoration(
-          color: scheme.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: theme.dividerColor.withValues(alpha: 0.55)),
-        ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Activity',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: scheme.onSurface,
-                          ),
+    final panel = Container(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.55)),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Activity',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: scheme.onSurface,
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '$activityCount entries this month',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
-                          ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '$activityCount entries this month',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
                         ),
-                      ],
+                      ),
+                    ],
+                  ),
+                ),
+                if (showBulkCollapse) ...[
+                  Tooltip(
+                    message: allDailyCollapsed
+                        ? 'Expand all dates'
+                        : 'Collapse all dates',
+                    child: IconButton.filledTonal(
+                      onPressed: () => _toggleAllDailySections(dailyDateKeys),
+                      icon: Icon(
+                        allDailyCollapsed
+                            ? Icons.unfold_more_rounded
+                            : Icons.unfold_less_rounded,
+                      ),
+                      style: IconButton.styleFrom(
+                        fixedSize: const Size(40, 40),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
                     ),
                   ),
-                  if (showBulkCollapse) ...[
-                    Tooltip(
-                      message: allDailyCollapsed
-                          ? 'Expand all dates'
-                          : 'Collapse all dates',
-                      child: IconButton.filledTonal(
-                        onPressed: () => _toggleAllDailySections(dailyDateKeys),
-                        icon: Icon(
-                          allDailyCollapsed
-                              ? Icons.unfold_more_rounded
-                              : Icons.unfold_less_rounded,
-                        ),
-                        style: IconButton.styleFrom(
-                          fixedSize: const Size(40, 40),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                  ],
-                  Container(
-                    width: 268,
-                    height: 40,
-                    padding: const EdgeInsets.all(3),
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceContainerHighest
-                          .withValues(alpha: 0.55),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: TabBar(
-                      controller: _tabController,
-                      onTap: _onTabTapped,
-                      indicatorSize: TabBarIndicatorSize.tab,
-                      dividerColor: Colors.transparent,
-                      labelColor: scheme.onPrimary,
-                      unselectedLabelColor: scheme.onSurfaceVariant,
-                      labelStyle: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                      unselectedLabelStyle: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      indicator: BoxDecoration(
-                        color: scheme.primary,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      tabs: const [
-                        Tab(text: 'Daily'),
-                        Tab(text: 'Calendar'),
-                        Tab(text: 'Monthly'),
-                      ],
-                    ),
-                  ),
+                  const SizedBox(width: 10),
                 ],
-              ),
-            ),
-            Divider(
-                height: 1, color: theme.dividerColor.withValues(alpha: 0.6)),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  _buildDailyTab(
-                    expenseProvider,
-                    incomeProvider,
-                    webMode: true,
+                Container(
+                  width: 268,
+                  height: 40,
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    color:
+                        scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  CalendarView(
-                    selectedMonth: _selectedMonth,
-                    expenses: expenseProvider.expenses,
-                    incomeHistory: incomeProvider.allIncomeHistory,
-                    onMonthSelected: _selectMonth,
+                  child: TabBar(
+                    controller: _tabController,
+                    onTap: _onTabTapped,
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    dividerColor: Colors.transparent,
+                    labelColor: scheme.onPrimary,
+                    unselectedLabelColor: scheme.onSurfaceVariant,
+                    labelStyle: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    unselectedLabelStyle: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    indicator: BoxDecoration(
+                      color: scheme.primary,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    tabs: const [
+                      Tab(text: 'Daily'),
+                      Tab(text: 'Calendar'),
+                      Tab(text: 'Monthly'),
+                    ],
                   ),
-                  MonthlyView(selectedMonth: _selectedMonth),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          Divider(height: 1, color: theme.dividerColor.withValues(alpha: 0.6)),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                _buildDailyTab(
+                  expenseProvider,
+                  incomeProvider,
+                  webMode: true,
+                ),
+                CalendarView(
+                  selectedMonth: _selectedMonth,
+                  expenses: expenseProvider.expenses,
+                  incomeHistory: incomeProvider.allIncomeHistory,
+                  onMonthSelected: _selectMonth,
+                ),
+                MonthlyView(selectedMonth: _selectedMonth),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (!isCalendarTab) {
+      return Expanded(child: panel);
+    }
+
+    return Flexible(
+      fit: FlexFit.loose,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final height = constraints.maxHeight.clamp(0.0, 720.0);
+          return Align(
+            alignment: Alignment.topCenter,
+            child: SizedBox(
+              height: height,
+              child: panel,
+            ),
+          );
+        },
       ),
     );
   }

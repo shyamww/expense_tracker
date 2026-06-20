@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
@@ -119,17 +120,33 @@ class _ReportScreenState extends State<ReportScreen> {
 
       final pngBytes = byteData.buffer.asUint8List();
 
-      final tempDir = await getTemporaryDirectory();
-      final file = File('${tempDir.path}/expense_report.png');
-      await file.writeAsBytes(pngBytes);
-
       final from = DateFormat('dd MMM yyyy').format(_fromDate);
       final to = DateFormat('dd MMM yyyy').format(_toDate);
+      final fileName =
+          'expense_report_${DateFormat('yyyyMMdd').format(_fromDate)}_${DateFormat('yyyyMMdd').format(_toDate)}.png';
+      final text =
+          'Expense Report ($from – $to)\nTotal Spending: ₹${formatRupeesTwoDecimalsFromDouble(_total)}';
 
+      if (kIsWeb) {
+        await Share.shareXFiles(
+          [
+            XFile.fromData(
+              pngBytes,
+              name: fileName,
+              mimeType: 'image/png',
+            ),
+          ],
+          text: text,
+        );
+        return;
+      }
+
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/$fileName');
+      await file.writeAsBytes(pngBytes);
       await Share.shareXFiles(
         [XFile(file.path)],
-        text:
-            'Expense Report ($from – $to)\nTotal Spending: ₹${formatRupeesTwoDecimalsFromDouble(_total)}',
+        text: text,
       );
     } catch (e) {
       if (mounted) {

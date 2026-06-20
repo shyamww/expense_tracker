@@ -69,49 +69,47 @@ class ExpenseTrackerApp extends StatelessWidget {
     final scheme = ColorScheme.fromSeed(
       seedColor: const Color(0xFF4F46E5),
       brightness: brightness,
-      surface: isDark ? const Color(0xFF141824) : Colors.white,
+      surface: isDark ? const Color(0xFF171B26) : Colors.white,
     );
+    final background =
+        isDark ? const Color(0xFF0D111A) : const Color(0xFFF8F9FB);
+    final surface = isDark ? const Color(0xFF171B26) : Colors.white;
+    final inputFill = isDark ? const Color(0xFF111827) : Colors.white;
 
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
       brightness: brightness,
-      scaffoldBackgroundColor:
-          isDark ? const Color(0xFF0F131C) : const Color(0xFFF8F9FB),
+      fontFamily: 'Roboto',
+      scaffoldBackgroundColor: background,
+      canvasColor: background,
       appBarTheme: AppBarTheme(
-        backgroundColor:
-            isDark ? const Color(0xFF0F131C) : const Color(0xFFF8F9FB),
+        backgroundColor: background,
         foregroundColor: scheme.onSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
       ),
       cardTheme: CardThemeData(
-        color: scheme.surface,
+        color: surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
       ),
-      dividerColor: isDark
-          ? Colors.white.withValues(alpha: 0.08)
-          : const Color(0xFFE5E7EB),
+      dividerColor: isDark ? const Color(0xFF2A3142) : const Color(0xFFE5E7EB),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: isDark ? const Color(0xFF171C28) : Colors.white,
+        fillColor: inputFill,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.10)
-                : const Color(0xFFD1D5DB),
+            color: isDark ? const Color(0xFF30384A) : const Color(0xFFD1D5DB),
           ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.10)
-                : const Color(0xFFD1D5DB),
+            color: isDark ? const Color(0xFF30384A) : const Color(0xFFD1D5DB),
           ),
         ),
         focusedBorder: OutlineInputBorder(
@@ -120,14 +118,14 @@ class ExpenseTrackerApp extends StatelessWidget {
         ),
       ),
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: scheme.surface,
+        backgroundColor: surface,
         surfaceTintColor: Colors.transparent,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: scheme.surface,
+        backgroundColor: surface,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),

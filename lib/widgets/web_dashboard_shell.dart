@@ -30,9 +30,12 @@ class WebDashboardShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final background =
+        isDark ? const Color(0xFF0D111A) : const Color(0xFFF6F7FB);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
+      backgroundColor: background,
       body: Row(
         children: [
           _WebSidebar(selectedRoute: selectedRoute),
@@ -259,11 +262,12 @@ class _WebSidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     return Container(
       width: 92,
       decoration: BoxDecoration(
-        color: scheme.surface,
+        color: isDark ? const Color(0xFF0A0F19) : scheme.surface,
         border: Border(
           right: BorderSide(color: theme.dividerColor.withValues(alpha: 0.7)),
         ),
@@ -342,8 +346,16 @@ class _WebNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
     final color = selected ? scheme.primary : scheme.onSurfaceVariant;
+    final selectedFill = isDark
+        ? scheme.primary.withValues(alpha: 0.18)
+        : scheme.primary.withValues(alpha: 0.10);
+    final selectedBorder = isDark
+        ? scheme.primary.withValues(alpha: 0.28)
+        : scheme.primary.withValues(alpha: 0.18);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -357,14 +369,10 @@ class _WebNavItem extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
-              color: selected
-                  ? scheme.primary.withValues(alpha: 0.10)
-                  : Colors.transparent,
+              color: selected ? selectedFill : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: selected
-                    ? scheme.primary.withValues(alpha: 0.18)
-                    : Colors.transparent,
+                color: selected ? selectedBorder : Colors.transparent,
               ),
             ),
             child: Column(

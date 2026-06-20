@@ -83,37 +83,10 @@ class _CalendarViewState extends State<CalendarView> {
   @override
   Widget build(BuildContext context) {
     final maxPage = _maxPageIndex();
-    final scheme = Theme.of(context).colorScheme;
-    final theme = Theme.of(context);
 
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 2, 4, 2),
-          child: Row(
-            children:
-                ['S', 'M', 'T', 'W', 'T', 'F', 'S'].asMap().entries.map((e) {
-              final i = e.key;
-              final d = e.value;
-              final weekend = i == 0 || i == 6;
-              return Expanded(
-                child: Center(
-                  child: Text(
-                    d,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      color: weekend
-                          ? Colors.red.shade400
-                          : scheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-        Divider(height: 1, thickness: 1, color: theme.dividerColor),
+        _buildWeekdayHeader(context),
         Expanded(
           child: PageView.builder(
             controller: _pageController,
@@ -134,6 +107,48 @@ class _CalendarViewState extends State<CalendarView> {
     );
   }
 
+  Widget _buildWeekdayHeader(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final roomy = constraints.maxWidth >= 720;
+        final labels = roomy
+            ? const ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+            : const ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+        return Container(
+          height: roomy ? 38 : 30,
+          margin: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: theme.dividerColor),
+          ),
+          child: Row(
+            children: labels.asMap().entries.map((entry) {
+              final weekend = entry.key == 0 || entry.key == 6;
+              return Expanded(
+                child: Center(
+                  child: Text(
+                    entry.value,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: weekend
+                          ? Colors.red.shade400
+                          : scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildMonthGrid(BuildContext context, DateTime month) {
     final monthPrefix = DateFormat('yyyy-MM').format(month);
     final dailyTotals = _computeDailyTotals(monthPrefix);
@@ -149,22 +164,21 @@ class _CalendarViewState extends State<CalendarView> {
     final firstDay = DateTime(month.year, month.month, 1);
     final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
     final startWeekday = firstDay.weekday % 7;
-    final totalCells = startWeekday + daysInMonth;
-    final rowCount = ((totalCells) / 7).ceil();
+    const rowCount = 6;
 
-    // Cap row height so day cells stay compact; extra space sits below the grid (same summary on all tabs).
     return LayoutBuilder(
       builder: (context, constraints) {
-        const maxRow = 75.0;
-        const padBottom = 4.0;
+        final roomy = constraints.maxWidth >= 720;
+        final maxRow = roomy ? 94.0 : 76.0;
+        const padBottom = 8.0;
         final innerH =
             (constraints.maxHeight - padBottom).clamp(0.0, double.infinity);
-        final perRow = rowCount > 0 ? innerH / rowCount : 0.0;
+        final perRow = innerH / rowCount;
         final rowH = perRow > maxRow ? maxRow : perRow;
         final slack = (innerH - rowH * rowCount).clamp(0.0, double.infinity);
 
         return Padding(
-          padding: EdgeInsets.fromLTRB(4, 0, 4, padBottom + slack),
+          padding: EdgeInsets.fromLTRB(8, 8, 8, padBottom + slack),
           child: Column(
             children: [
               for (var rowIndex = 0; rowIndex < rowCount; rowIndex++)
@@ -233,34 +247,35 @@ class _CalendarViewState extends State<CalendarView> {
   ) {
     final today = DateTime.now();
     final todayStr = DateFormat('yyyy-MM-dd').format(today);
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final selectedFill = scheme.primaryContainer.withValues(alpha: 0.65);
     final selectedBorder = scheme.primary;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final h = constraints.maxHeight.isFinite ? constraints.maxHeight : 40.0;
-        final dayFont = (h * 0.30).clamp(10.0, 13.0);
-        final amtFont = (h * 0.17).clamp(6.5, 8.0);
-        const cellMargin = 1.0;
+        final roomy = constraints.maxWidth >= 720;
+        final dayFont = roomy ? 15.0 : (h * 0.24).clamp(11.0, 13.0);
+        final badgeFont = roomy ? 11.0 : (h * 0.16).clamp(7.0, 9.0);
+        final cellMargin = roomy ? 3.0 : 1.5;
 
         return Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: List.generate(7, (colIndex) {
             final cellIndex = rowIndex * 7 + colIndex;
             final dayNum = cellIndex - startWeekday + 1;
-
-            if (dayNum < 1 || dayNum > daysInMonth) {
-              return Expanded(child: Container());
-            }
-
+            final cellDate = DateTime(month.year, month.month, dayNum);
+            final inCurrentMonth = dayNum >= 1 && dayNum <= daysInMonth;
             final dateStr = DateFormat('yyyy-MM-dd').format(
-              DateTime(month.year, month.month, dayNum),
+              cellDate,
             );
-            final totals = dailyTotals[dateStr];
-            final isToday = dateStr == todayStr;
+            final totals = inCurrentMonth ? dailyTotals[dateStr] : null;
+            final hasTotals =
+                totals != null && (totals.spent > 0 || totals.received > 0);
+            final isToday = inCurrentMonth && dateStr == todayStr;
             final isWeekend = colIndex == 0 || colIndex == 6;
-            final isSelected = _selectedDateStr == dateStr;
+            final isSelected = inCurrentMonth && _selectedDateStr == dateStr;
 
             Color? cellBg;
             Color borderColor;
@@ -274,9 +289,18 @@ class _CalendarViewState extends State<CalendarView> {
                   Theme.of(context).colorScheme.primary.withValues(alpha: 0.1);
               borderColor = Theme.of(context).colorScheme.primary;
               borderWidth = 1.5;
+            } else if (!inCurrentMonth) {
+              cellBg = scheme.surfaceContainerLowest;
+              borderColor = theme.dividerColor.withValues(alpha: 0.45);
+              borderWidth = 0.5;
+            } else if (hasTotals) {
+              cellBg = scheme.surface;
+              borderColor = theme.dividerColor.withValues(alpha: 0.9);
+              borderWidth = 0.8;
             } else {
               cellBg = Theme.of(context).colorScheme.surface;
-              borderColor = Theme.of(context).dividerColor;
+              borderColor =
+                  Theme.of(context).dividerColor.withValues(alpha: 0.65);
               borderWidth = 0.5;
             }
 
@@ -284,39 +308,38 @@ class _CalendarViewState extends State<CalendarView> {
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  onTap: () {
-                    setState(() => _selectedDateStr = dateStr);
-                    final hasEntry = datesWithActivity.contains(dateStr);
-                    if (!hasEntry) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('No entry for this day'),
-                          behavior: SnackBarBehavior.floating,
-                          margin: EdgeInsets.fromLTRB(16, 0, 16, 88),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                      return;
-                    }
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => DayDetailScreen(date: dateStr),
-                      ),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(6),
+                  onTap: !inCurrentMonth
+                      ? null
+                      : () {
+                          setState(() => _selectedDateStr = dateStr);
+                          final hasEntry = datesWithActivity.contains(dateStr);
+                          if (!hasEntry) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('No entry for this day'),
+                                behavior: SnackBarBehavior.floating,
+                                margin: EdgeInsets.fromLTRB(16, 0, 16, 88),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                            return;
+                          }
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => DayDetailScreen(date: dateStr),
+                            ),
+                          );
+                        },
+                  borderRadius: BorderRadius.circular(8),
                   child: Container(
-                    margin: const EdgeInsets.all(cellMargin),
-                    padding: EdgeInsets.symmetric(
-                      vertical: h >= 34 ? 2 : 1,
-                      horizontal: 0,
-                    ),
+                    margin: EdgeInsets.all(cellMargin),
+                    padding: EdgeInsets.all(roomy ? 10 : 6),
                     decoration: BoxDecoration(
                       color: cellBg,
                       border:
                           Border.all(color: borderColor, width: borderWidth),
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(8),
                       boxShadow: isSelected || isToday
                           ? [
                               BoxShadow(
@@ -330,72 +353,70 @@ class _CalendarViewState extends State<CalendarView> {
                             ]
                           : null,
                     ),
-                    child: Center(
+                    child: Opacity(
+                      opacity: inCurrentMonth ? 1 : 0.42,
                       child: Column(
-                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '$dayNum',
-                            style: TextStyle(
-                              fontSize: dayFont,
-                              fontWeight: isSelected || isToday
-                                  ? FontWeight.w800
-                                  : FontWeight.w600,
-                              color: isSelected
-                                  ? selectedBorder
-                                  : isToday
-                                      ? Theme.of(context).colorScheme.primary
-                                      : isWeekend
-                                          ? Colors.red.shade400
-                                          : scheme.onSurface,
-                            ),
-                          ),
-                          if (totals != null &&
-                              (totals.spent > 0 || totals.received > 0))
-                            Padding(
-                              padding: const EdgeInsets.only(top: 1),
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (totals.spent > 0)
-                                      Text(
-                                        _formatAmount(totals.spent),
-                                        style: TextStyle(
-                                          fontSize: amtFont,
-                                          fontWeight: FontWeight.w700,
-                                          color: Colors.red.shade600,
-                                          height: 1,
-                                        ),
-                                      ),
-                                    if (totals.spent > 0 && totals.received > 0)
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 2),
-                                        child: Text(
-                                          '·',
-                                          style: TextStyle(
-                                            fontSize: amtFont,
-                                            fontWeight: FontWeight.w700,
-                                            color: scheme.onSurfaceVariant,
-                                            height: 1,
-                                          ),
-                                        ),
-                                      ),
-                                    if (totals.received > 0)
-                                      Text(
-                                        _formatAmount(totals.received),
-                                        style: TextStyle(
-                                          fontSize: amtFont,
-                                          fontWeight: FontWeight.w700,
-                                          color: Colors.green.shade700,
-                                          height: 1,
-                                        ),
-                                      ),
-                                  ],
+                          Row(
+                            children: [
+                              Text(
+                                '${cellDate.day}',
+                                style: TextStyle(
+                                  fontSize: dayFont,
+                                  fontWeight: isSelected || isToday
+                                      ? FontWeight.w900
+                                      : FontWeight.w800,
+                                  color: isSelected
+                                      ? selectedBorder
+                                      : isToday
+                                          ? theme.colorScheme.primary
+                                          : isWeekend
+                                              ? Colors.red.shade400
+                                              : scheme.onSurface,
                                 ),
                               ),
+                              const Spacer(),
+                              if (isToday)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.primary
+                                        .withValues(alpha: 0.10),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    'Today',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: theme.colorScheme.primary,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const Spacer(),
+                          if (hasTotals)
+                            Wrap(
+                              spacing: 4,
+                              runSpacing: 4,
+                              children: [
+                                if (totals.spent > 0)
+                                  _amountBadge(
+                                    context,
+                                    '-${_formatAmount(totals.spent)}',
+                                    Colors.red.shade600,
+                                    badgeFont,
+                                  ),
+                                if (totals.received > 0)
+                                  _amountBadge(
+                                    context,
+                                    '+${_formatAmount(totals.received)}',
+                                    Colors.green.shade700,
+                                    badgeFont,
+                                  ),
+                              ],
                             ),
                         ],
                       ),
@@ -407,6 +428,32 @@ class _CalendarViewState extends State<CalendarView> {
           }),
         );
       },
+    );
+  }
+
+  Widget _amountBadge(
+    BuildContext context,
+    String text,
+    Color color,
+    double fontSize,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: fontSize,
+          height: 1,
+          fontWeight: FontWeight.w900,
+          color: color,
+        ),
+      ),
     );
   }
 

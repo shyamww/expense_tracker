@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -258,6 +259,824 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     );
   }
 
+  bool get _useWebLayout {
+    if (!kIsWeb) return false;
+    final size = MediaQuery.maybeSizeOf(context);
+    return size != null && size.width >= 720;
+  }
+
+  String get _saveLabel {
+    if (_isEditing) return 'Save changes';
+    return _transferMode ? 'Save transfer' : 'Save Expense';
+  }
+
+  String get _amountPreview {
+    final paisa = paisaFromRupeeString(_amountController.text);
+    if (paisa <= 0) return '0.00';
+    return formatRupeesFixed2FromPaisa(paisa);
+  }
+
+  Widget _buildWebExpenseScaffold() {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: SafeArea(
+        bottom: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1180),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      IconButton.filledTonal(
+                        tooltip: 'Back',
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.arrow_back_rounded),
+                        style: IconButton.styleFrom(
+                          fixedSize: const Size(44, 44),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _isEditing ? 'Edit Expense' : 'Add Expense',
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                color: scheme.onSurface,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _transferMode
+                                  ? 'Move money between your own accounts'
+                                  : 'Record spending with category, account, date, and note',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      FilledButton.icon(
+                        onPressed: _save,
+                        icon: const Icon(Icons.check_rounded, size: 18),
+                        label: Text(_saveLabel),
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 15,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.only(bottom: 32),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final twoColumn = constraints.maxWidth >= 980;
+                          final form = _buildWebFormPanel();
+                          final summary = _buildWebSummaryPanel();
+                          if (!twoColumn) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                form,
+                                const SizedBox(height: 16),
+                                summary,
+                              ],
+                            );
+                          }
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(flex: 7, child: form),
+                              const SizedBox(width: 18),
+                              SizedBox(width: 340, child: summary),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWebFormPanel() {
+    return _buildWebPanel(
+      icon: Icons.receipt_long_rounded,
+      title: 'Expense details',
+      subtitle: 'Keep the fields compact and review everything before saving.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final inline = constraints.maxWidth >= 680;
+              final amount = _buildWebTextField(
+                label: 'Amount',
+                child: TextField(
+                  controller: _amountController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                  ),
+                  decoration: const InputDecoration(
+                    prefixText: '₹ ',
+                    hintText: '0.00',
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              );
+              final note = _buildWebTextField(
+                label: 'Note',
+                child: TextField(
+                  controller: _noteController,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: InputDecoration(
+                    hintText: _transferMode
+                        ? 'e.g., Move to savings'
+                        : 'e.g., Lunch with friends',
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              );
+              if (!inline) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    amount,
+                    const SizedBox(height: 14),
+                    note,
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(width: 250, child: amount),
+                  const SizedBox(width: 14),
+                  Expanded(child: note),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 18),
+          _buildWebDateTimeSection(),
+          const SizedBox(height: 18),
+          if (!_transferMode) ...[
+            _buildWebCategorySection(),
+            const SizedBox(height: 18),
+          ] else ...[
+            _buildWebTransferNotice(),
+            const SizedBox(height: 18),
+          ],
+          _buildWebAccountSection(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebPanel({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Widget child,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.72)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, color: scheme.primary, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: scheme.onSurface,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWebTextField({
+    required String label,
+    required Widget child,
+  }) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: theme.colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 8),
+        child,
+      ],
+    );
+  }
+
+  Widget _buildWebDateTimeSection() {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Date & time',
+          style: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: theme.colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 8),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final inline = constraints.maxWidth >= 560;
+            final date = _buildWebDateTimeTile(
+              icon: Icons.calendar_month_rounded,
+              label: 'Date',
+              value: DateFormat('EEE, dd MMM yyyy').format(_selectedDateTime),
+              onTap: _pickDate,
+            );
+            final time = _buildWebDateTimeTile(
+              icon: Icons.schedule_rounded,
+              label: 'Time',
+              value: DateFormat('hh:mm a').format(_selectedDateTime),
+              onTap: _pickTime,
+            );
+            if (!inline) {
+              return Column(
+                children: [
+                  date,
+                  const SizedBox(height: 10),
+                  time,
+                ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(child: date),
+                const SizedBox(width: 12),
+                Expanded(child: time),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWebDateTimeTile({
+    required IconData icon,
+    required String label,
+    required String value,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLow.withValues(alpha: 0.62),
+            borderRadius: BorderRadius.circular(10),
+            border:
+                Border.all(color: theme.dividerColor.withValues(alpha: 0.8)),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: scheme.primary, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurface,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.keyboard_arrow_down_rounded,
+                  color: scheme.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWebCategorySection() {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Category',
+          style: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: theme.colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Consumer<CategoryProvider>(
+          builder: (context, cat, _) {
+            if (cat.categories.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                child: Text(
+                  'Loading categories...',
+                  style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              );
+            }
+            final visible = cat.categories
+                .where((c) => !CategoryProvider.isTransferCategory(c.name))
+                .toList();
+            return Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: visible.map((c) {
+                final info = c.toCategoryInfo();
+                return CategoryChip(
+                  category: info,
+                  compact: true,
+                  selected: _selectedCategory == c.name,
+                  onTap: () => setState(() => _selectedCategory = c.name),
+                );
+              }).toList(),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWebTransferNotice() {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: scheme.primary.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.swap_horiz_rounded, color: scheme.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Moving money between your own accounts. This does not count as income or expense in reports.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurface,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebAccountSection() {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Account',
+          style: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: theme.colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (_accountLocked)
+          _buildLockedAccountTile()
+        else
+          Consumer<AccountProvider>(
+            builder: (context, ap, _) {
+              if (ap.accounts.isEmpty) {
+                return Text(
+                  'Add an account in Settings > Accounts.',
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontSize: 14,
+                  ),
+                );
+              }
+              if (ap.accounts.length < 2) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Add at least two accounts to use To Self transfers.',
+                      style: TextStyle(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: ap.accounts.map((a) {
+                        return AccountChip(
+                          name: a.name,
+                          compact: true,
+                          selected: _selectedAccount == a.name,
+                          onTap: () => setState(() {
+                            _transferMode = false;
+                            _selectedAccount = a.name;
+                          }),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      AccountChip(
+                        name: 'To Self',
+                        compact: true,
+                        selected: _transferMode,
+                        onTap: () {
+                          setState(() {
+                            _transferMode = true;
+                            _selectedAccount = null;
+                            _transferFrom = ap.accounts[0].name;
+                            _transferTo = ap.accounts[1].name;
+                          });
+                        },
+                      ),
+                      ...ap.accounts.map((a) {
+                        return AccountChip(
+                          name: a.name,
+                          compact: true,
+                          selected:
+                              !_transferMode && _selectedAccount == a.name,
+                          onTap: () => setState(() {
+                            _transferMode = false;
+                            _selectedAccount = a.name;
+                          }),
+                        );
+                      }),
+                    ],
+                  ),
+                  if (_transferMode) ...[
+                    const SizedBox(height: 16),
+                    _buildTransferAccountChoices(ap),
+                  ],
+                ],
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildLockedAccountTile() {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow.withValues(alpha: 0.62),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.8)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.lock_rounded, color: scheme.onSurfaceVariant, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              widget.lockAccountTo!.trim(),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: scheme.onSurface,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransferAccountChoices(AccountProvider ap) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'From account',
+          style: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: theme.colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: ap.accounts.map((a) {
+            return AccountChip(
+              name: a.name,
+              compact: true,
+              selected: _transferFrom == a.name,
+              onTap: () => setState(() {
+                _transferFrom = a.name;
+                if (_transferTo == a.name) {
+                  _transferTo =
+                      ap.accounts.firstWhere((x) => x.name != a.name).name;
+                }
+              }),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 14),
+        Text(
+          'To account',
+          style: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w800,
+            color: theme.colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: ap.accounts.map((a) {
+            final disabled = a.name == _transferFrom;
+            return Opacity(
+              opacity: disabled ? 0.42 : 1,
+              child: AccountChip(
+                name: a.name,
+                compact: true,
+                selected: _transferTo == a.name,
+                onTap: disabled
+                    ? () {}
+                    : () => setState(() => _transferTo = a.name),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWebSummaryPanel() {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final category = _transferMode
+        ? 'To Self transfer'
+        : (_selectedCategory ?? 'Not selected');
+    final account = _accountLocked
+        ? widget.lockAccountTo!.trim()
+        : _transferMode
+            ? '${_transferFrom ?? '-'} -> ${_transferTo ?? '-'}'
+            : (_selectedAccount ?? 'Not selected');
+
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.72)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Review',
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: scheme.onSurface,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _isEditing
+                  ? 'Changes will update this entry.'
+                  : 'Confirm the details before saving.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: scheme.primary.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(10),
+                border:
+                    Border.all(color: scheme.primary.withValues(alpha: 0.18)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Amount',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '₹ $_amountPreview',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      color: scheme.primary,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            _buildWebSummaryRow(Icons.category_rounded, 'Category', category),
+            _buildWebSummaryRow(
+                Icons.account_balance_rounded, 'Account', account),
+            _buildWebSummaryRow(
+              Icons.calendar_today_rounded,
+              'Date',
+              DateFormat('dd MMM yyyy').format(_selectedDateTime),
+            ),
+            _buildWebSummaryRow(
+              Icons.schedule_rounded,
+              'Time',
+              DateFormat('hh:mm a').format(_selectedDateTime),
+            ),
+            if (_noteController.text.trim().isNotEmpty)
+              _buildWebSummaryRow(
+                Icons.notes_rounded,
+                'Note',
+                _noteController.text.trim(),
+              ),
+            const SizedBox(height: 18),
+            SizedBox(
+              height: 50,
+              child: FilledButton.icon(
+                onPressed: _save,
+                icon: const Icon(Icons.check_rounded, size: 18),
+                label: Text(_saveLabel),
+                style: FilledButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWebSummaryRow(IconData icon, String label, String value) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: scheme.onSurfaceVariant),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurface,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isEditing &&
@@ -279,7 +1098,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
                 style: TextStyle(
                   fontSize: 16,
                   height: 1.45,
-                  color: Colors.grey.shade800,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
               const SizedBox(height: 28),
@@ -291,6 +1110,10 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           ),
         ),
       );
+    }
+
+    if (_useWebLayout) {
+      return _buildWebExpenseScaffold();
     }
 
     return Scaffold(
