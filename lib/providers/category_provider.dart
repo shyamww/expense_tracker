@@ -12,6 +12,10 @@ class CategoryProvider extends ChangeNotifier {
   final DatabaseHelper _db = DatabaseHelper();
 
   List<ExpenseCategory> _allCategories = [];
+  bool _loaded = false;
+
+  bool get isLoaded => _loaded;
+
   List<ExpenseCategory> get categories =>
       List.unmodifiable(_allCategories.where((c) => !c.archived));
   List<ExpenseCategory> get archivedCategories =>
@@ -31,6 +35,7 @@ class CategoryProvider extends ChangeNotifier {
 
   Future<void> loadCategories({bool notify = true}) async {
     _allCategories = await _db.getExpenseCategories(includeArchived: true);
+    _loaded = true;
     if (notify) notifyListeners();
   }
 

@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../app_routes.dart';
 import '../providers/app_lock_provider.dart';
 import '../providers/theme_provider.dart';
 import '../services/app_lock_service.dart';
 import '../services/expense_reminder_service.dart';
 import '../widgets/feedback_form_sheet.dart';
+import '../widgets/web_dashboard_shell.dart';
 import 'backup_screen.dart';
 import 'category_management_screen.dart';
 import 'account_management_screen.dart';
@@ -18,120 +20,418 @@ class SettingsScreen extends StatelessWidget {
   static const String _appVersion = '1.0.0';
   static const String _developerName = 'Shyam Gautam';
 
+  Widget _buildWebSettingsBody(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 900;
+          final left = Column(
+            children: [
+              _buildWebSettingsPanel(
+                context,
+                title: 'General',
+                icon: Icons.tune_rounded,
+                children: [
+                  _buildWebSettingTile(
+                    context,
+                    icon: Icons.palette_outlined,
+                    title: 'Appearance',
+                    subtitle: 'Switch between light and dark mode',
+                    onTap: () {
+                      showModalBottomSheet<void>(
+                        context: context,
+                        showDragHandle: true,
+                        builder: (_) => const _ThemeSettingsSheet(),
+                      );
+                    },
+                  ),
+                  _buildWebSettingTile(
+                    context,
+                    icon: Icons.category_outlined,
+                    title: 'Categories',
+                    subtitle: 'Add, edit, or delete expense categories',
+                    onTap: () {
+                      Navigator.push<void>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const CategoryManagementScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _buildWebSettingTile(
+                    context,
+                    icon: Icons.account_balance_outlined,
+                    title: 'Accounts',
+                    subtitle: 'Banks and cash used for income and expenses',
+                    onTap: () {
+                      Navigator.push<void>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AccountManagementScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _buildWebSettingsPanel(
+                context,
+                title: 'Data',
+                icon: Icons.storage_rounded,
+                children: [
+                  _buildWebSettingTile(
+                    context,
+                    icon: Icons.folder_outlined,
+                    title: 'Where your data lives',
+                    subtitle:
+                        'Stored locally in this browser. Backup moves data between browsers or devices.',
+                    trailing: const Icon(Icons.lock_outline_rounded, size: 18),
+                  ),
+                  _buildWebSettingTile(
+                    context,
+                    icon: Icons.cloud_outlined,
+                    title: 'Backup & restore',
+                    subtitle: 'Export or import your data',
+                    onTap: () async {
+                      await Navigator.push<void>(
+                        context,
+                        MaterialPageRoute(builder: (_) => const BackupScreen()),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ],
+          );
+          final right = Column(
+            children: [
+              _buildWebSettingsPanel(
+                context,
+                title: 'Privacy & notifications',
+                icon: Icons.verified_user_outlined,
+                children: [
+                  _buildWebSettingTile(
+                    context,
+                    icon: Icons.notifications_off_outlined,
+                    title: 'Daily reminder',
+                    subtitle: 'Not available on web',
+                    enabled: false,
+                  ),
+                  _buildWebSettingTile(
+                    context,
+                    icon: Icons.lock_outline_rounded,
+                    title: 'App lock',
+                    subtitle: 'Not available on web',
+                    enabled: false,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _buildWebSettingsPanel(
+                context,
+                title: 'Support',
+                icon: Icons.support_agent_rounded,
+                children: [
+                  _buildWebSettingTile(
+                    context,
+                    icon: Icons.feedback_outlined,
+                    title: 'Send feedback',
+                    subtitle: 'Sent with Web3Forms',
+                    onTap: () => _openFeedbackSheet(context),
+                  ),
+                  _buildWebSettingTile(
+                    context,
+                    icon: Icons.info_outline_rounded,
+                    title: 'App info',
+                    subtitle: 'Version, developer, and details',
+                    onTap: () => _showAppInfoDialog(context),
+                  ),
+                ],
+              ),
+            ],
+          );
+
+          if (!wide) {
+            return Column(
+              children: [
+                left,
+                const SizedBox(height: 16),
+                right,
+              ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: left),
+              const SizedBox(width: 18),
+              Expanded(child: right),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildWebSettingsPanel(
+    BuildContext context, {
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return WebPanel(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.11),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: scheme.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebSettingTile(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    VoidCallback? onTap,
+    Widget? trailing,
+    bool enabled = true,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final color = enabled ? scheme.onSurface : scheme.onSurfaceVariant;
+    final action = enabled ? onTap : null;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: enabled ? scheme.surface : scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: action,
+          borderRadius: BorderRadius.circular(8),
+          child: Ink(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: theme.dividerColor),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color:
+                        scheme.primary.withValues(alpha: enabled ? 0.10 : 0.05),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: enabled ? scheme.primary : scheme.onSurfaceVariant,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: color,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                trailing ??
+                    Icon(
+                      action == null
+                          ? Icons.remove_circle_outline_rounded
+                          : Icons.chevron_right_rounded,
+                      color: scheme.onSurfaceVariant,
+                    ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final body = ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      children: [
+        const _SectionHeader(title: 'Notifications'),
+        if (kIsWeb)
+          ListTile(
+            leading: Icon(Icons.notifications_off_outlined,
+                color: scheme.onSurfaceVariant),
+            title: const Text('Daily reminder'),
+            subtitle: const Text('Not available on web'),
+          )
+        else
+          const _DailyReminderSettings(),
+        const Divider(height: 1),
+        const _SectionHeader(title: 'Privacy'),
+        if (kIsWeb)
+          ListTile(
+            leading: Icon(Icons.lock_outline_rounded,
+                color: scheme.onSurfaceVariant),
+            title: const Text('App lock'),
+            subtitle: const Text('Not available on web'),
+          )
+        else
+          const _AppLockSettings(),
+        const Divider(height: 1),
+        const _SectionHeader(title: 'General'),
+        ListTile(
+          leading:
+              Icon(Icons.info_outline_rounded, color: scheme.onSurfaceVariant),
+          title: const Text('App info'),
+          subtitle: const Text('Version, developer, and details'),
+          onTap: () => _showAppInfoDialog(context),
+        ),
+        ListTile(
+          leading: Icon(Icons.palette_outlined, color: scheme.onSurfaceVariant),
+          title: const Text('Appearance'),
+          subtitle: const Text('Switch between light and dark mode'),
+          onTap: () {
+            showModalBottomSheet<void>(
+              context: context,
+              showDragHandle: true,
+              builder: (_) => const _ThemeSettingsSheet(),
+            );
+          },
+        ),
+        ListTile(
+          leading:
+              Icon(Icons.category_outlined, color: scheme.onSurfaceVariant),
+          title: const Text('Categories'),
+          subtitle: const Text('Add, edit, or delete expense categories'),
+          onTap: () {
+            Navigator.push<void>(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const CategoryManagementScreen()),
+            );
+          },
+        ),
+        ListTile(
+          leading: Icon(Icons.account_balance_outlined,
+              color: scheme.onSurfaceVariant),
+          title: const Text('Accounts'),
+          subtitle: const Text(
+              'Banks and cash — used when adding income or expenses'),
+          onTap: () {
+            Navigator.push<void>(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => const AccountManagementScreen()),
+            );
+          },
+        ),
+        const Divider(height: 1),
+        const _SectionHeader(title: 'Data'),
+        ListTile(
+          leading: Icon(Icons.folder_outlined, color: scheme.onSurfaceVariant),
+          title: const Text('Where your data lives'),
+          subtitle: const Text(
+            kIsWeb
+                ? 'Stored locally in this browser. Use Backup to move data between browsers or devices.'
+                : 'Stored locally on this device. Use Backup to export or restore JSON.',
+          ),
+        ),
+        ListTile(
+          leading: Icon(Icons.cloud_outlined, color: scheme.onSurfaceVariant),
+          title: const Text('Backup & restore'),
+          subtitle: const Text('Export or import your data'),
+          onTap: () async {
+            await Navigator.push<void>(
+              context,
+              MaterialPageRoute(builder: (_) => const BackupScreen()),
+            );
+          },
+        ),
+        const Divider(height: 1),
+        const _SectionHeader(title: 'Support'),
+        ListTile(
+          leading:
+              Icon(Icons.feedback_outlined, color: scheme.onSurfaceVariant),
+          title: const Text('Send feedback'),
+          subtitle:
+              const Text('Sent with Web3Forms — your inbox is not in the app'),
+          onTap: () => _openFeedbackSheet(context),
+        ),
+      ],
+    );
+
+    if (WebDashboardShell.useFor(context)) {
+      return WebDashboardShell(
+        selectedRoute: AppRoutes.settings,
+        title: 'Settings',
+        subtitle: 'Manage privacy, backup, accounts, and app preferences',
+        child: _buildWebSettingsBody(context),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
         centerTitle: true,
       ),
-      body: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        children: [
-          _SectionHeader(title: 'Notifications'),
-          if (kIsWeb)
-            ListTile(
-              leading: Icon(Icons.notifications_off_outlined,
-                  color: scheme.onSurfaceVariant),
-              title: const Text('Daily reminder'),
-              subtitle: const Text('Not available on web'),
-            )
-          else
-            const _DailyReminderSettings(),
-          const Divider(height: 1),
-          _SectionHeader(title: 'Privacy'),
-          if (kIsWeb)
-            ListTile(
-              leading: Icon(Icons.lock_outline_rounded,
-                  color: scheme.onSurfaceVariant),
-              title: const Text('App lock'),
-              subtitle: const Text('Not available on web'),
-            )
-          else
-            const _AppLockSettings(),
-          const Divider(height: 1),
-          _SectionHeader(title: 'General'),
-          ListTile(
-            leading: Icon(Icons.info_outline_rounded,
-                color: scheme.onSurfaceVariant),
-            title: const Text('App info'),
-            subtitle: const Text('Version, developer, and details'),
-            onTap: () => _showAppInfoDialog(context),
-          ),
-          ListTile(
-            leading:
-                Icon(Icons.palette_outlined, color: scheme.onSurfaceVariant),
-            title: const Text('Appearance'),
-            subtitle: const Text('Switch between light and dark mode'),
-            onTap: () {
-              showModalBottomSheet<void>(
-                context: context,
-                showDragHandle: true,
-                builder: (_) => const _ThemeSettingsSheet(),
-              );
-            },
-          ),
-          ListTile(
-            leading:
-                Icon(Icons.category_outlined, color: scheme.onSurfaceVariant),
-            title: const Text('Categories'),
-            subtitle: const Text('Add, edit, or delete expense categories'),
-            onTap: () {
-              Navigator.push<void>(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const CategoryManagementScreen()),
-              );
-            },
-          ),
-          ListTile(
-            leading: Icon(Icons.account_balance_outlined,
-                color: scheme.onSurfaceVariant),
-            title: const Text('Accounts'),
-            subtitle: const Text(
-                'Banks and cash — used when adding income or expenses'),
-            onTap: () {
-              Navigator.push<void>(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => const AccountManagementScreen()),
-              );
-            },
-          ),
-          const Divider(height: 1),
-          _SectionHeader(title: 'Data'),
-          ListTile(
-            leading:
-                Icon(Icons.folder_outlined, color: scheme.onSurfaceVariant),
-            title: const Text('Where your data lives'),
-            subtitle: const Text(
-              'Stored locally on this device. Use Backup to export or restore JSON.',
-            ),
-          ),
-          ListTile(
-            leading: Icon(Icons.cloud_outlined, color: scheme.onSurfaceVariant),
-            title: const Text('Backup & restore'),
-            subtitle: const Text('Export or import your data'),
-            onTap: () async {
-              await Navigator.push<void>(
-                context,
-                MaterialPageRoute(builder: (_) => const BackupScreen()),
-              );
-            },
-          ),
-          const Divider(height: 1),
-          _SectionHeader(title: 'Support'),
-          ListTile(
-            leading:
-                Icon(Icons.feedback_outlined, color: scheme.onSurfaceVariant),
-            title: const Text('Send feedback'),
-            subtitle: const Text(
-                'Sent with Web3Forms — your inbox is not in the app'),
-            onTap: () => _openFeedbackSheet(context),
-          ),
-        ],
-      ),
+      body: body,
     );
   }
 
@@ -215,12 +515,13 @@ class SettingsScreen extends StatelessWidget {
                   ),
                   child: Column(
                     children: [
-                      _AppInfoRow(label: 'Version', value: _appVersion),
+                      const _AppInfoRow(label: 'Version', value: _appVersion),
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         child: Divider(height: 1, color: theme.dividerColor),
                       ),
-                      _AppInfoRow(label: 'Developer', value: _developerName),
+                      const _AppInfoRow(
+                          label: 'Developer', value: _developerName),
                     ],
                   ),
                 ),

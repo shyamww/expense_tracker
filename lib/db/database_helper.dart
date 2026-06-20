@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/expense.dart';
 import '../models/income.dart';
 import '../models/income_entry.dart';
@@ -19,7 +20,10 @@ class DatabaseHelper {
   factory DatabaseHelper() => _instance;
   DatabaseHelper._internal();
 
-  // ── Web in-memory storage ──
+  // ── Web browser storage ──
+  static const String _webStoreKey = 'expense_tracker.web_store.v1';
+  static const int _webStoreVersion = 1;
+
   final List<Map<String, dynamic>> _webExpenses = [];
   final List<Map<String, dynamic>> _webIncome = [];
   final List<Map<String, dynamic>> _webIncomeHistory = [];
@@ -30,6 +34,7 @@ class DatabaseHelper {
   int _nextIncomeHistoryId = 1;
   int _nextCategoryId = 1;
   int _nextAccountId = 1;
+  bool _webStoreLoaded = false;
 
   // ── Mobile SQLite ──
   Database? _database;
@@ -45,6 +50,161 @@ class DatabaseHelper {
       onUpgrade: _onUpgrade,
     );
     return _database!;
+  }
+
+  Future<void> _ensureWebStoreLoaded() async {
+    if (!kIsWeb || _webStoreLoaded) return;
+    _webStoreLoaded = true;
+
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_webStoreKey);
+    if (raw == null || raw.isEmpty) return;
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+      final data = Map<String, dynamic>.from(decoded);
+
+      _webExpenses
+        ..clear()
+        ..addAll(_webRowsFrom(data['expenses']));
+      _webIncome
+        ..clear()
+        ..addAll(_webRowsFrom(data['income']));
+      _webIncomeHistory
+        ..clear()
+        ..addAll(_webRowsFrom(data['income_history']));
+      _webExpenseCategories
+        ..clear()
+        ..addAll(_webRowsFrom(data['expense_categories']));
+      _webAccounts
+        ..clear()
+        ..addAll(_webRowsFrom(data['accounts']));
+
+      _nextExpenseId = _nextWebId(data['next_expense_id'], _webExpenses);
+      _nextIncomeId = _nextWebId(data['next_income_id'], _webIncome);
+      _nextIncomeHistoryId =
+          _nextWebId(data['next_income_history_id'], _webIncomeHistory);
+      _nextCategoryId =
+          _nextWebId(data['next_category_id'], _webExpenseCategories);
+      _nextAccountId = _nextWebId(data['next_account_id'], _webAccounts);
+
+      _normalizeWebRows();
+    } catch (_) {
+      _webExpenses.clear();
+      _webIncome.clear();
+      _webIncomeHistory.clear();
+      _webExpenseCategories.clear();
+      _webAccounts.clear();
+      _nextExpenseId = 1;
+      _nextIncomeId = 1;
+      _nextIncomeHistoryId = 1;
+      _nextCategoryId = 1;
+      _nextAccountId = 1;
+    }
+  }
+
+  Future<void> _persistWebStore() async {
+    if (!kIsWeb) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_webStoreKey, jsonEncode(_webStoreSnapshot()));
+  }
+
+  List<Map<String, dynamic>> _webRowsFrom(Object? raw) {
+    if (raw is! List) return [];
+    return raw
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
+  int _nextWebId(Object? storedValue, List<Map<String, dynamic>> rows) {
+    final stored = storedValue is num ? storedValue.toInt() : null;
+    final maxExisting = rows.fold<int>(0, (maxId, row) {
+      final id = row['id'];
+      if (id is! num) return maxId;
+      return id.toInt() > maxId ? id.toInt() : maxId;
+    });
+    final minimum = maxExisting + 1;
+    if (stored == null || stored < minimum) return minimum;
+    return stored;
+  }
+
+  void _normalizeWebRows() {
+    for (final expense in _webExpenses) {
+      expense['id'] = _webRowId(expense['id'], () => _nextExpenseId++);
+      expense['amount'] = amountPaisaFromMap(expense['amount']);
+      expense['category'] = expense['category'] as String? ?? '';
+      expense['account'] = expense['account'] as String? ?? '';
+      expense['note'] = expense['note'] as String? ?? '';
+      expense['date'] = expense['date'] as String? ?? '';
+      expense['created_at'] =
+          expense['created_at'] as String? ?? DateTime.now().toIso8601String();
+    }
+    for (final income in _webIncome) {
+      income['id'] = _webRowId(income['id'], () => _nextIncomeId++);
+      income['amount'] = amountPaisaFromMap(income['amount']);
+      income['month'] = income['month'] as String? ?? '';
+    }
+    for (final history in _webIncomeHistory) {
+      history['id'] = _webRowId(history['id'], () => _nextIncomeHistoryId++);
+      history['amount'] = amountPaisaFromMap(history['amount']);
+      history['month'] = history['month'] as String? ?? '';
+      history['account'] = history['account'] as String? ?? '';
+      history['note'] = history['note'] as String? ?? '';
+      history['created_at'] =
+          history['created_at'] as String? ?? DateTime.now().toIso8601String();
+    }
+    for (final category in _webExpenseCategories) {
+      category['id'] = _webRowId(category['id'], () => _nextCategoryId++);
+      category['name'] = category['name'] as String? ?? '';
+      category['icon_code_point'] = _asInt(
+        category['icon_code_point'],
+        kUnknownCategoryIconCodePoint,
+      );
+      category['color'] = _asInt(category['color'], 0xFF78909C);
+      category['sort_order'] = _asInt(category['sort_order'], 0);
+      category['system_locked'] = _asInt(category['system_locked'], 0);
+      category['archived'] = _asInt(category['archived'], 0);
+    }
+    for (final account in _webAccounts) {
+      account['id'] = _webRowId(account['id'], () => _nextAccountId++);
+      account['name'] = account['name'] as String? ?? '';
+      account['sort_order'] = _asInt(account['sort_order'], 0);
+      account['archived'] = _asInt(account['archived'], 0);
+    }
+  }
+
+  int _webRowId(Object? value, int Function() fallback) {
+    if (value is int && value > 0) return value;
+    if (value is num && value > 0) return value.toInt();
+    return fallback();
+  }
+
+  int _asInt(Object? value, int fallback) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return fallback;
+  }
+
+  Map<String, dynamic> _webStoreSnapshot() {
+    List<Map<String, dynamic>> copyRows(List<Map<String, dynamic>> rows) =>
+        rows.map((row) => Map<String, dynamic>.from(row)).toList();
+
+    return {
+      'version': _webStoreVersion,
+      'saved_at': DateTime.now().toIso8601String(),
+      'next_expense_id': _nextExpenseId,
+      'next_income_id': _nextIncomeId,
+      'next_income_history_id': _nextIncomeHistoryId,
+      'next_category_id': _nextCategoryId,
+      'next_account_id': _nextAccountId,
+      'expenses': copyRows(_webExpenses),
+      'income': copyRows(_webIncome),
+      'income_history': copyRows(_webIncomeHistory),
+      'expense_categories': copyRows(_webExpenseCategories),
+      'accounts': copyRows(_webAccounts),
+    };
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -283,6 +443,8 @@ class DatabaseHelper {
     bool includeArchived = false,
   }) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
+      var changed = false;
       if (_webExpenseCategories.isEmpty) {
         for (final c in buildSeededExpenseCategories()) {
           _webExpenseCategories.add({
@@ -295,6 +457,7 @@ class DatabaseHelper {
             'archived': c.archived ? 1 : 0,
           });
         }
+        changed = true;
       } else {
         final names =
             _webExpenseCategories.map((m) => m['name'] as String).toSet();
@@ -310,8 +473,10 @@ class DatabaseHelper {
             'archived': c.archived ? 1 : 0,
           });
           names.add(c.name);
+          changed = true;
         }
       }
+      if (changed) await _persistWebStore();
       final sorted = List<Map<String, dynamic>>.from(_webExpenseCategories)
         ..removeWhere((m) =>
             !includeArchived && ((m['archived'] as num?)?.toInt() ?? 0) == 1)
@@ -338,6 +503,7 @@ class DatabaseHelper {
       'archived': c.archived ? 1 : 0,
     };
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       if (_webExpenseCategories
           .any((m) => (m['name'] as String) == row['name'])) {
         throw StateError('duplicate_name');
@@ -345,6 +511,7 @@ class DatabaseHelper {
       final map = Map<String, dynamic>.from(row);
       map['id'] = _nextCategoryId++;
       _webExpenseCategories.add(map);
+      await _persistWebStore();
       return map['id'] as int;
     }
     final db = await _getDb();
@@ -363,6 +530,7 @@ class DatabaseHelper {
       'archived': c.archived ? 1 : 0,
     };
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       final idx = _webExpenseCategories.indexWhere((m) => m['id'] == c.id);
       if (idx == -1) return;
       final trimmed = c.name.trim();
@@ -376,6 +544,7 @@ class DatabaseHelper {
           if (e['category'] == previousName) e['category'] = trimmed;
         }
       }
+      await _persistWebStore();
       return;
     }
     final db = await _getDb();
@@ -399,6 +568,7 @@ class DatabaseHelper {
 
   Future<int> countExpensesWithCategory(String categoryName) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       return _webExpenses.where((m) => m['category'] == categoryName).length;
     }
     final db = await _getDb();
@@ -417,9 +587,11 @@ class DatabaseHelper {
     required String toName,
   }) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       for (final e in _webExpenses) {
         if (e['category'] == fromName) e['category'] = toName;
       }
+      await _persistWebStore();
       return;
     }
     final db = await _getDb();
@@ -433,7 +605,9 @@ class DatabaseHelper {
 
   Future<void> deleteExpenseCategoryById(int id) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       _webExpenseCategories.removeWhere((m) => m['id'] == id);
+      await _persistWebStore();
       return;
     }
     final db = await _getDb();
@@ -442,9 +616,11 @@ class DatabaseHelper {
 
   Future<void> setExpenseCategoryArchived(int id, bool archived) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       final idx = _webExpenseCategories.indexWhere((m) => m['id'] == id);
       if (idx == -1) return;
       _webExpenseCategories[idx]['archived'] = archived ? 1 : 0;
+      await _persistWebStore();
       return;
     }
     final db = await _getDb();
@@ -460,6 +636,8 @@ class DatabaseHelper {
 
   Future<List<AppAccount>> getAccounts({bool includeArchived = false}) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
+      var changed = false;
       if (_webAccounts.isEmpty) {
         for (final a in buildSeededAccounts()) {
           _webAccounts.add({
@@ -469,7 +647,9 @@ class DatabaseHelper {
             'archived': a.archived ? 1 : 0,
           });
         }
+        changed = true;
       }
+      if (changed) await _persistWebStore();
       final sorted = List<Map<String, dynamic>>.from(_webAccounts)
         ..removeWhere((m) =>
             !includeArchived && ((m['archived'] as num?)?.toInt() ?? 0) == 1)
@@ -493,12 +673,14 @@ class DatabaseHelper {
       'archived': a.archived ? 1 : 0,
     };
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       if (_webAccounts.any((m) => (m['name'] as String) == row['name'])) {
         throw StateError('duplicate_name');
       }
       final map = Map<String, dynamic>.from(row);
       map['id'] = _nextAccountId++;
       _webAccounts.add(map);
+      await _persistWebStore();
       return map['id'] as int;
     }
     final db = await _getDb();
@@ -514,6 +696,7 @@ class DatabaseHelper {
       'archived': a.archived ? 1 : 0,
     };
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       final idx = _webAccounts.indexWhere((m) => m['id'] == a.id);
       if (idx == -1) return;
       final trimmed = a.name.trim();
@@ -530,6 +713,7 @@ class DatabaseHelper {
           if (h['account'] == previousName) h['account'] = trimmed;
         }
       }
+      await _persistWebStore();
       return;
     }
     final db = await _getDb();
@@ -559,6 +743,7 @@ class DatabaseHelper {
 
   Future<int> countExpensesWithAccount(String accountName) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       return _webExpenses.where((m) => m['account'] == accountName).length;
     }
     final db = await _getDb();
@@ -574,6 +759,7 @@ class DatabaseHelper {
 
   Future<int> countIncomeHistoryWithAccount(String accountName) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       return _webIncomeHistory.where((m) => m['account'] == accountName).length;
     }
     final db = await _getDb();
@@ -592,9 +778,11 @@ class DatabaseHelper {
     required String toName,
   }) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       for (final e in _webExpenses) {
         if (e['account'] == fromName) e['account'] = toName;
       }
+      await _persistWebStore();
       return;
     }
     final db = await _getDb();
@@ -611,9 +799,11 @@ class DatabaseHelper {
     required String toName,
   }) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       for (final h in _webIncomeHistory) {
         if (h['account'] == fromName) h['account'] = toName;
       }
+      await _persistWebStore();
       return;
     }
     final db = await _getDb();
@@ -627,7 +817,9 @@ class DatabaseHelper {
 
   Future<void> deleteAccountById(int id) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       _webAccounts.removeWhere((m) => m['id'] == id);
+      await _persistWebStore();
       return;
     }
     final db = await _getDb();
@@ -636,9 +828,11 @@ class DatabaseHelper {
 
   Future<void> setAccountArchived(int id, bool archived) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       final idx = _webAccounts.indexWhere((m) => m['id'] == id);
       if (idx == -1) return;
       _webAccounts[idx]['archived'] = archived ? 1 : 0;
+      await _persistWebStore();
       return;
     }
     final db = await _getDb();
@@ -653,6 +847,7 @@ class DatabaseHelper {
   /// Sum of all account balances: income credits; Received + transfer-in credit; other expenses debit.
   Future<double> getCumulativeAccountBalance() async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       var totalPaisa = 0;
       for (final e in _webExpenses) {
         final acct = e['account'] as String? ?? '';
@@ -691,6 +886,7 @@ class DatabaseHelper {
   /// Same rules as [getCumulativeAccountBalance], split by `account` name (values in paisa).
   Future<Map<String, int>> getPerAccountBalances() async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       final balances = <String, int>{};
       for (final e in _webExpenses) {
         final acct = e['account'] as String? ?? '';
@@ -740,9 +936,11 @@ class DatabaseHelper {
 
   Future<int> insertExpense(Expense expense) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       final map = Map<String, dynamic>.from(expense.toMap());
       map['id'] = _nextExpenseId++;
       _webExpenses.add(map);
+      await _persistWebStore();
       return map['id'] as int;
     }
     final db = await _getDb();
@@ -757,6 +955,7 @@ class DatabaseHelper {
 
   Future<List<Expense>> getAllExpenses() async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       final sorted = List<Map<String, dynamic>>.from(_webExpenses)
         ..sort(_compareExpenseRowDesc);
       return sorted.map((m) => Expense.fromMap(m)).toList();
@@ -769,6 +968,7 @@ class DatabaseHelper {
 
   Future<List<Expense>> getExpensesByMonth(String month) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       final filtered = _webExpenses
           .where((m) => (m['date'] as String).startsWith(month))
           .toList()
@@ -787,6 +987,7 @@ class DatabaseHelper {
 
   Future<List<Expense>> getExpensesByDateRange(String from, String to) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       final filtered = _webExpenses.where((m) {
         final date = m['date'] as String;
         return date.compareTo(from) >= 0 && date.compareTo(to) <= 0;
@@ -806,6 +1007,7 @@ class DatabaseHelper {
 
   Future<Expense?> getExpenseById(int id) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       for (final row in _webExpenses) {
         if (row['id'] == id) return Expense.fromMap(row);
       }
@@ -820,10 +1022,12 @@ class DatabaseHelper {
 
   Future<int> updateExpense(Expense expense) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       final index = _webExpenses.indexWhere((m) => m['id'] == expense.id);
       if (index != -1) {
         _webExpenses[index] = Map<String, dynamic>.from(expense.toMap());
         _webExpenses[index]['id'] = expense.id;
+        await _persistWebStore();
       }
       return index != -1 ? 1 : 0;
     }
@@ -838,6 +1042,7 @@ class DatabaseHelper {
         existing != null ? parseTransferNotePrefix(existing.note) : null;
 
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       final before = _webExpenses.length;
       if (prefix != null) {
         _webExpenses.removeWhere(
@@ -846,6 +1051,7 @@ class DatabaseHelper {
       } else {
         _webExpenses.removeWhere((m) => m['id'] == id);
       }
+      await _persistWebStore();
       return before - _webExpenses.length;
     }
     final db = await _getDb();
@@ -903,15 +1109,18 @@ class DatabaseHelper {
     await _insertIncomeHistory(entry);
 
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       final index = _webIncome.indexWhere((m) => m['month'] == income.month);
       if (index != -1) {
         final oldAmount = amountPaisaFromMap(_webIncome[index]['amount']);
         _webIncome[index]['amount'] = oldAmount + income.amount;
+        await _persistWebStore();
         return 1;
       } else {
         final map = Map<String, dynamic>.from(income.toMap());
         map['id'] = _nextIncomeId++;
         _webIncome.add(map);
+        await _persistWebStore();
         return map['id'] as int;
       }
     }
@@ -932,9 +1141,11 @@ class DatabaseHelper {
 
   Future<int> _insertIncomeHistory(IncomeEntry entry) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       final map = Map<String, dynamic>.from(entry.toMap());
       map['id'] = _nextIncomeHistoryId++;
       _webIncomeHistory.add(map);
+      await _persistWebStore();
       return map['id'] as int;
     }
     final db = await _getDb();
@@ -943,6 +1154,7 @@ class DatabaseHelper {
 
   Future<List<IncomeEntry>> getIncomeHistoryForMonth(String month) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       final filtered = _webIncomeHistory
           .where((m) => m['month'] == month)
           .toList()
@@ -962,6 +1174,7 @@ class DatabaseHelper {
 
   Future<List<IncomeEntry>> getAllIncomeHistory() async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       final sorted = List<Map<String, dynamic>>.from(_webIncomeHistory)
         ..sort((a, b) =>
             (b['created_at'] as String).compareTo(a['created_at'] as String));
@@ -974,6 +1187,7 @@ class DatabaseHelper {
 
   Future<IncomeEntry?> getIncomeHistoryById(int id) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       try {
         final m = _webIncomeHistory.firstWhere((e) => e['id'] == id);
         return IncomeEntry.fromMap(m);
@@ -991,6 +1205,7 @@ class DatabaseHelper {
   /// Rebuilds [income] row for [month] from the sum of [income_history] rows.
   Future<void> _recomputeIncomeAggregateForMonth(String month) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       final sum = _webIncomeHistory
           .where((m) => m['month'] == month)
           .fold<int>(0, (s, m) => s + amountPaisaFromMap(m['amount']));
@@ -1002,6 +1217,7 @@ class DatabaseHelper {
       } else {
         _webIncome.add({'id': _nextIncomeId++, 'month': month, 'amount': sum});
       }
+      await _persistWebStore();
       return;
     }
     final db = await _getDb();
@@ -1032,6 +1248,7 @@ class DatabaseHelper {
     final oldMonth = old.month;
 
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       final idx = _webIncomeHistory.indexWhere((m) => m['id'] == entry.id);
       if (idx == -1) return;
       _webIncomeHistory[idx] = {
@@ -1046,6 +1263,7 @@ class DatabaseHelper {
       if (oldMonth != entry.month) {
         await _recomputeIncomeAggregateForMonth(entry.month);
       }
+      await _persistWebStore();
       return;
     }
     final db = await _getDb();
@@ -1073,8 +1291,10 @@ class DatabaseHelper {
     final month = old.month;
 
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       _webIncomeHistory.removeWhere((m) => m['id'] == id);
       await _recomputeIncomeAggregateForMonth(month);
+      await _persistWebStore();
       return;
     }
     final db = await _getDb();
@@ -1102,6 +1322,7 @@ class DatabaseHelper {
 
   Future<Income?> getIncomeForMonth(String month) async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       final match = _webIncome.where((m) => m['month'] == month).toList();
       if (match.isNotEmpty) return Income.fromMap(match.first);
       return null;
@@ -1123,6 +1344,7 @@ class DatabaseHelper {
     var totalReceivedPaisa = 0;
 
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       for (final m in _webIncome) {
         if ((m['month'] as String).compareTo(month) < 0) {
           totalIncomePaisa += amountPaisaFromMap(m['amount']);
@@ -1174,6 +1396,7 @@ class DatabaseHelper {
     var fromExpensesPaisa = 0;
 
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       for (final h in _webIncomeHistory) {
         if ((h['account'] as String? ?? '') != account) continue;
         if ((h['month'] as String).compareTo(month) < 0) {
@@ -1300,6 +1523,7 @@ class DatabaseHelper {
   Future<List<Income>> getIncomeForYear(int year) async {
     final yearPrefix = '$year-';
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       final filtered = _webIncome
           .where((m) => (m['month'] as String).startsWith(yearPrefix))
           .toList();
@@ -1324,6 +1548,7 @@ class DatabaseHelper {
 
   Future<List<Map<String, dynamic>>> _getAllIncome() async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       return List<Map<String, dynamic>>.from(_webIncome);
     }
     final db = await _getDb();
@@ -1332,6 +1557,7 @@ class DatabaseHelper {
 
   Future<List<Map<String, dynamic>>> _getAllIncomeHistory() async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       return List<Map<String, dynamic>>.from(_webIncomeHistory);
     }
     final db = await _getDb();
@@ -1340,6 +1566,7 @@ class DatabaseHelper {
 
   Future<List<Map<String, dynamic>>> _getAllAccounts() async {
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       return List<Map<String, dynamic>>.from(_webAccounts);
     }
     final db = await _getDb();
@@ -1418,6 +1645,7 @@ class DatabaseHelper {
     final accList = data['accounts'] as List<dynamic>?;
 
     if (kIsWeb) {
+      await _ensureWebStoreLoaded();
       _webExpenses.clear();
       _webIncome.clear();
       _webIncomeHistory.clear();
@@ -1489,6 +1717,7 @@ class DatabaseHelper {
         await _insertSeedExpenseCategoriesWeb();
         await _ensureExpenseCategoryRowsForOrphansWeb();
       }
+      await _persistWebStore();
       return;
     }
 
@@ -1569,6 +1798,7 @@ class DatabaseHelper {
         'id': _nextAccountId++,
         'name': a.name,
         'sort_order': a.sortOrder,
+        'archived': a.archived ? 1 : 0,
       });
     }
   }
@@ -1582,6 +1812,7 @@ class DatabaseHelper {
         'color': c.colorValue,
         'sort_order': c.sortOrder,
         'system_locked': c.systemLocked ? 1 : 0,
+        'archived': c.archived ? 1 : 0,
       });
     }
   }
@@ -1606,6 +1837,7 @@ class DatabaseHelper {
         'color': 0xFF78909C,
         'sort_order': maxOrder,
         'system_locked': 0,
+        'archived': 0,
       });
       names.add(cat);
     }

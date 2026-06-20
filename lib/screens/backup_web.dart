@@ -1,5 +1,5 @@
 import 'dart:convert';
-// ignore: avoid_web_libraries_in_flutter
+// ignore: avoid_web_libraries_in_flutter, deprecated_member_use
 import 'dart:html' as html;
 
 import 'package:flutter/material.dart';
@@ -9,7 +9,7 @@ Future<void> shareBackup(BuildContext context, String jsonString) async {
   final blob = html.Blob([bytes], 'application/octet-stream');
   final url = html.Url.createObjectUrlFromBlob(blob);
 
-  final anchor = html.AnchorElement(href: url)
+  html.AnchorElement(href: url)
     ..setAttribute('download', 'expense_backup.bak')
     ..click();
 

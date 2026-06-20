@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
@@ -24,12 +23,13 @@ Future<void> shareBackup(BuildContext context, String jsonString) async {
   final tempDir = Directory.systemTemp;
   final timestamp = DateTime.now().millisecondsSinceEpoch;
   final file = File(p.join(tempDir.path, 'expense_backup_$timestamp.bak'));
+  final sharePositionOrigin = _sharePositionOrigin(context);
   await file.writeAsString(jsonString);
 
   await Share.shareXFiles(
     [XFile(file.path)],
     subject: 'Expense Tracker Backup',
-    sharePositionOrigin: _sharePositionOrigin(context),
+    sharePositionOrigin: sharePositionOrigin,
   );
 }
 

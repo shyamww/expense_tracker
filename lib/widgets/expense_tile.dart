@@ -115,6 +115,14 @@ class ExpenseTile extends StatelessWidget {
                     color: scheme.onSurface,
                   ),
                 ),
+                if (onLongPress != null) ...[
+                  const SizedBox(width: 4),
+                  IconButton(
+                    icon: const Icon(Icons.more_vert_rounded),
+                    tooltip: 'Actions',
+                    onPressed: onLongPress,
+                  ),
+                ],
               ],
             ),
           ),

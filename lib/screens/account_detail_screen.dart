@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../constants/reporting_category_names.dart';
+import '../app_routes.dart';
 import '../core/money.dart';
 import '../db/database_helper.dart';
 import '../models/account_ledger_day.dart';
@@ -11,10 +12,12 @@ import '../models/income_entry.dart';
 import '../providers/account_provider.dart';
 import '../providers/expense_provider.dart';
 import '../providers/income_provider.dart';
+import '../services/browser_route.dart';
 import '../widgets/expense_tile.dart';
 import '../widgets/income_history_tile.dart';
 import '../widgets/expense_action_sheet.dart';
 import '../widgets/income_action_sheet.dart';
+import '../widgets/web_dashboard_shell.dart';
 
 /// Per-account monthly ledger: day-wise income + expenses, carry forward, totals.
 class AccountDetailScreen extends StatefulWidget {
@@ -200,7 +203,7 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
                           color: scheme.onSurfaceVariant),
                       title:
                           Text(DateFormat('dd MMMM yyyy').format(pickedDate)),
-                      trailing: const Icon(Icons.edit_calendar),
+                      trailing: const Icon(Icons.expand_more_rounded),
                       onTap: () async {
                         final d = await showDatePicker(
                           context: context,
@@ -289,11 +292,370 @@ class _AccountDetailScreenState extends State<AccountDetailScreen> {
     );
   }
 
+  void _returnToAccounts() {
+    if (WebDashboardShell.useFor(context)) {
+      pushBrowserRoute(AppRoutes.accounts);
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.accounts,
+        (_) => false,
+      );
+      return;
+    }
+    Navigator.of(context).maybePop();
+  }
+
+  Widget _buildWebAccountDetailBody(AccountMonthLedger? ledger) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final monthLabel = DateFormat('MMMM yyyy').format(_selectedMonth);
+
+    return WebDashboardShell(
+      selectedRoute: AppRoutes.accounts,
+      title: widget.accountName,
+      subtitle: 'Account ledger · $monthLabel',
+      maxContentWidth: 1280,
+      actions: [
+        OutlinedButton.icon(
+          onPressed: _returnToAccounts,
+          icon: const Icon(Icons.arrow_back_rounded, size: 18),
+          label: const Text('Back to accounts'),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
+      ],
+      child: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : ledger == null
+              ? _buildWebEmptyLedger(scheme, theme)
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildWebMonthControls(theme, ledger),
+                      const SizedBox(height: 14),
+                      _buildWebAccountMetrics(ledger),
+                      const SizedBox(height: 14),
+                      _buildWebLedgerPanel(ledger),
+                    ],
+                  ),
+                ),
+    );
+  }
+
+  Widget _buildWebEmptyLedger(ColorScheme scheme, ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: WebPanel(
+        child: SizedBox(
+          height: 360,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.receipt_long_outlined,
+                  size: 46,
+                  color: scheme.onSurfaceVariant,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'No activity this month',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Income or expenses on this account will show here.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWebMonthControls(
+    ThemeData theme,
+    AccountMonthLedger ledger,
+  ) {
+    final scheme = theme.colorScheme;
+    final balanceColor =
+        ledger.balance >= 0 ? const Color(0xFF059669) : const Color(0xFFDC2626);
+
+    return WebPanel(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      child: Row(
+        children: [
+          _webMonthButton(
+            icon: Icons.chevron_left_rounded,
+            tooltip: 'Previous month',
+            onTap: () => _changeMonth(-1),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  DateFormat('MMMM yyyy').format(_selectedMonth),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _isCurrentMonth ? 'Current month' : 'Historical month',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                'Balance',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '₹ ${formatRupeesTwoDecimalsFromDouble(ledger.balance)}',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  color: balanceColor,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 12),
+          _webMonthButton(
+            icon: Icons.chevron_right_rounded,
+            tooltip: 'Next month',
+            onTap: _isCurrentMonth ? null : () => _changeMonth(1),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _webMonthButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback? onTap,
+  }) {
+    final theme = Theme.of(context);
+    return IconButton.filledTonal(
+      onPressed: onTap,
+      icon: Icon(icon),
+      tooltip: tooltip,
+      style: IconButton.styleFrom(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        fixedSize: const Size(42, 42),
+        disabledBackgroundColor: theme.colorScheme.surfaceContainerLow,
+      ),
+    );
+  }
+
+  Widget _buildWebAccountMetrics(AccountMonthLedger ledger) {
+    final activityCount =
+        ledger.days.fold<int>(0, (total, day) => total + day.itemCount);
+    final metrics = [
+      WebMetricTile(
+        icon: Icons.swap_horiz_rounded,
+        label: 'Carry forward',
+        value: '₹ ${formatRupeesTwoDecimalsFromDouble(ledger.carryForward)}',
+        accent: const Color(0xFF0D9488),
+      ),
+      WebMetricTile(
+        icon: Icons.south_west_rounded,
+        label: 'Income',
+        value: '₹ ${formatRupeesTwoDecimalsFromDouble(ledger.monthIncome)}',
+        accent: const Color(0xFF2563EB),
+      ),
+      WebMetricTile(
+        icon: Icons.north_east_rounded,
+        label: 'Expense',
+        value: '₹ ${formatRupeesTwoDecimalsFromDouble(ledger.monthSpent)}',
+        accent: const Color(0xFFDC2626),
+      ),
+      WebMetricTile(
+        icon: Icons.receipt_long_outlined,
+        label: 'Activity',
+        value: '$activityCount',
+        subtitle: '${ledger.days.length} active days',
+        accent: const Color(0xFF7C3AED),
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final roomy = constraints.maxWidth >= 900;
+        final width = roomy
+            ? (constraints.maxWidth - 36) / 4
+            : (constraints.maxWidth - 12) / 2;
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            for (final metric in metrics) SizedBox(width: width, child: metric),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildWebLedgerPanel(AccountMonthLedger ledger) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final activityCount =
+        ledger.days.fold<int>(0, (total, day) => total + day.itemCount);
+    final dayKeys = ledger.days.map((day) => day.date).toSet();
+    final allCollapsed =
+        dayKeys.isNotEmpty && dayKeys.every(_collapsedDates.contains);
+
+    return WebPanel(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      child: ledger.days.isEmpty
+          ? SizedBox(
+              height: 320,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.receipt_long_outlined,
+                      size: 42,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'No activity this month',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Income or expenses on this account will show here.',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Transactions',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '$activityCount entries across ${ledger.days.length} days',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: scheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Tooltip(
+                      message: allCollapsed
+                          ? 'Expand all dates'
+                          : 'Collapse all dates',
+                      child: IconButton.filledTonal(
+                        onPressed: () {
+                          setState(() {
+                            if (allCollapsed) {
+                              _collapsedDates.removeAll(dayKeys);
+                            } else {
+                              _collapsedDates.addAll(dayKeys);
+                            }
+                          });
+                        },
+                        icon: Icon(
+                          allCollapsed
+                              ? Icons.unfold_more_rounded
+                              : Icons.unfold_less_rounded,
+                        ),
+                        style: IconButton.styleFrom(
+                          fixedSize: const Size(40, 40),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                ...ledger.days.map(
+                  (day) => _AccountDaySection(
+                    day: day,
+                    collapsed: _collapsedDates.contains(day.date),
+                    selectedExpenseId: _selectedExpenseId,
+                    selectedIncomeEntryId: _selectedIncomeEntryId,
+                    onToggleCollapse: () {
+                      setState(() {
+                        if (_collapsedDates.contains(day.date)) {
+                          _collapsedDates.remove(day.date);
+                        } else {
+                          _collapsedDates.add(day.date);
+                        }
+                      });
+                    },
+                    onExpenseLongPress: (e) => _onExpenseLongPress(context, e),
+                    onDeselect: () => setState(() => _selectedExpenseId = null),
+                    onIncomeLongPress: (e) =>
+                        _onIncomeHistoryLongPress(context, e),
+                    onIncomeDeselect: () =>
+                        setState(() => _selectedIncomeEntryId = null),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final ledger = _ledger;
+
+    if (WebDashboardShell.useFor(context)) {
+      return _buildWebAccountDetailBody(ledger);
+    }
 
     return Scaffold(
       appBar: AppBar(

@@ -15,6 +15,7 @@ enum FeedbackSendResult {
 /// Outcome of a feedback submission (for SnackBars and debugging).
 class FeedbackSendOutcome {
   final FeedbackSendResult result;
+
   /// Extra detail from the API or a hint for the user.
   final String? detail;
 
@@ -27,9 +28,7 @@ class FeedbackSubmitter {
 
   static bool get isConfigured {
     final k = kWeb3FormsAccessKey.trim();
-    return k.isNotEmpty &&
-        !k.contains('YOUR_ACCESS_KEY') &&
-        k.length >= 32;
+    return k.isNotEmpty && !k.contains('YOUR_ACCESS_KEY') && k.length >= 32;
   }
 
   static Future<FeedbackSendOutcome> send({
@@ -37,7 +36,8 @@ class FeedbackSubmitter {
     String? replyEmail,
   }) async {
     if (!isConfigured) {
-      debugPrint('[Feedback] isConfigured=false (check key length & placeholder)');
+      debugPrint(
+          '[Feedback] isConfigured=false (check key length & placeholder)');
       return const FeedbackSendOutcome(FeedbackSendResult.notConfigured);
     }
 
@@ -75,7 +75,8 @@ class FeedbackSubmitter {
           )
           .timeout(const Duration(seconds: 25));
 
-      debugPrint('[Feedback] HTTP ${res.statusCode} body=${_truncate(res.body)}');
+      debugPrint(
+          '[Feedback] HTTP ${res.statusCode} body=${_truncate(res.body)}');
 
       if (res.statusCode == 200) {
         try {
@@ -89,7 +90,7 @@ class FeedbackSubmitter {
           return FeedbackSendOutcome(FeedbackSendResult.rejected, msg);
         } catch (e) {
           debugPrint('[Feedback] JSON parse error: $e');
-          return FeedbackSendOutcome(
+          return const FeedbackSendOutcome(
             FeedbackSendResult.rejected,
             'Unexpected response from server.',
           );
@@ -109,8 +110,8 @@ class FeedbackSubmitter {
           es.contains('SocketException') ||
           es.contains('ClientException') ||
           es.contains('XMLHttpRequest');
-      final handshake = es.contains('HandshakeException') ||
-          es.contains('Handshake error');
+      final handshake =
+          es.contains('HandshakeException') || es.contains('Handshake error');
       return FeedbackSendOutcome(
         FeedbackSendResult.networkError,
         blocked

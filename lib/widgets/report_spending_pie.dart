@@ -92,20 +92,23 @@ class ReportSpendingPie extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final small = slices.where((s) => s.pct < kReportPieInsideLabelMinPct).toList()
+    final small = slices
+        .where((s) => s.pct < kReportPieInsideLabelMinPct)
+        .toList()
       ..sort((a, b) => a.midAngleDeg.compareTo(b.midAngleDeg));
 
-    const labelColW = 114.0;
+    const labelColW = 132.0;
     const rowH = 26.0;
     final hasSmall = small.isNotEmpty;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxW = constraints.maxWidth;
-        final labelW = hasSmall ? labelColW : 0.0;
+        final showCallouts = hasSmall && maxW >= 420;
+        final labelW = showCallouts ? labelColW : 0.0;
         final pieCellW = math.max(maxW - labelW, 120.0);
         final pieSize = math.min(pieCellW, 268.0);
-        final blockH = hasSmall ? small.length * rowH + 8 : 0.0;
+        final blockH = showCallouts ? small.length * rowH + 8 : 0.0;
         final chartH = math.max(pieSize, blockH);
 
         final cx = labelW + pieCellW / 2;
@@ -113,7 +116,7 @@ class ReportSpendingPie extends StatelessWidget {
         const rOuter = _kCenterSpaceRadius + _kSectionRadius;
 
         final callouts = <_CalloutLine>[];
-        if (hasSmall) {
+        if (showCallouts) {
           final startY = math.max(4.0, (chartH - small.length * rowH) / 2);
           for (var i = 0; i < small.length; i++) {
             final s = small[i];
@@ -124,7 +127,8 @@ class ReportSpendingPie extends StatelessWidget {
             );
             final y = startY + i * rowH + rowH / 2;
             final anchor = Offset(labelW - 2, y);
-            callouts.add(_CalloutLine(anchor: anchor, rim: rim, color: s.info.color));
+            callouts.add(
+                _CalloutLine(anchor: anchor, rim: rim, color: s.info.color));
           }
         }
 
@@ -137,7 +141,7 @@ class ReportSpendingPie extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  if (hasSmall)
+                  if (showCallouts)
                     SizedBox(
                       width: labelW,
                       height: chartH,
@@ -195,7 +199,8 @@ class ReportSpendingPie extends StatelessWidget {
                             sectionsSpace: 2,
                             centerSpaceRadius: _kCenterSpaceRadius,
                             sections: slices.map((s) {
-                              final inside = s.pct >= kReportPieInsideLabelMinPct;
+                              final inside =
+                                  s.pct >= kReportPieInsideLabelMinPct;
                               final onSlice = _sliceTitleOnColor(s.info.color);
                               return PieChartSectionData(
                                 value: s.value,
@@ -221,7 +226,7 @@ class ReportSpendingPie extends StatelessWidget {
                   ),
                 ],
               ),
-              if (callouts.isNotEmpty)
+              if (showCallouts && callouts.isNotEmpty)
                 CustomPaint(
                   size: Size(maxW, chartH),
                   painter: _ReportPieCalloutPainter(

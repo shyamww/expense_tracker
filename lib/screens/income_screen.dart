@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../core/money.dart';
+import '../app_routes.dart';
 import '../providers/income_provider.dart';
 import '../providers/expense_provider.dart';
 import '../providers/account_provider.dart';
@@ -14,6 +15,7 @@ import '../widgets/income_action_sheet.dart';
 import '../widgets/account_chip.dart';
 import '../widgets/expense_tile.dart';
 import '../widgets/expense_action_sheet.dart';
+import '../widgets/web_dashboard_shell.dart';
 
 class IncomeScreen extends StatefulWidget {
   const IncomeScreen({super.key});
@@ -239,6 +241,523 @@ class _IncomeScreenState extends State<IncomeScreen> {
     );
   }
 
+  Widget _buildWebIncomeBody({
+    required String displayMonth,
+    required double currentBalance,
+    required List<({String createdAt, Object item})> mergedHistory,
+  }) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildWebMonthSnapshot(displayMonth, currentBalance),
+          const SizedBox(height: 16),
+          _buildWebIncomeForm(),
+          const SizedBox(height: 16),
+          _buildWebHistoryPanel(
+            displayMonth: displayMonth,
+            mergedHistory: mergedHistory,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebMonthSnapshot(String displayMonth, double currentBalance) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final balanceColor =
+        currentBalance >= 0 ? const Color(0xFF059669) : const Color(0xFFDC2626);
+
+    return WebPanel(
+      padding: const EdgeInsets.all(18),
+      color: scheme.primary.withValues(alpha: 0.035),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 820;
+          final cardWidth = compact
+              ? (constraints.maxWidth - 12) / 2
+              : (constraints.maxWidth - 36) / 4;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          displayMonth,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          'Income and balance snapshot',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  _buildWebMonthStepper(),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  SizedBox(
+                    width: cardWidth,
+                    child: _WebIncomeKpiCard(
+                      icon: Icons.account_balance_wallet_outlined,
+                      label: 'Current balance',
+                      value:
+                          '₹ ${formatRupeesTwoDecimalsFromDouble(currentBalance)}',
+                      accent: balanceColor,
+                      subtitle: _carryForward != 0
+                          ? 'Carry forward ₹ ${formatRupeesTwoDecimalsFromDouble(_carryForward)}'
+                          : 'Available this month',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: _WebIncomeKpiCard(
+                      icon: Icons.south_west_rounded,
+                      label: 'Income',
+                      value:
+                          '₹ ${formatRupeesTwoDecimalsFromDouble(_currentTotal)}',
+                      accent: const Color(0xFF2563EB),
+                      subtitle: 'Recorded inflow',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: _WebIncomeKpiCard(
+                      icon: Icons.north_east_rounded,
+                      label: 'Expense',
+                      value:
+                          '₹ ${formatRupeesTwoDecimalsFromDouble(_monthExpense)}',
+                      accent: const Color(0xFFDC2626),
+                      subtitle: 'Monthly outflow',
+                    ),
+                  ),
+                  SizedBox(
+                    width: cardWidth,
+                    child: _WebIncomeKpiCard(
+                      icon: Icons.swap_horiz_rounded,
+                      label: 'Carry forward',
+                      value:
+                          '₹ ${formatRupeesTwoDecimalsFromDouble(_carryForward)}',
+                      accent: const Color(0xFF0D9488),
+                      subtitle: 'Previous balance',
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildWebIncomeForm() {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return WebPanel(
+      padding: const EdgeInsets.all(18),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final roomy = constraints.maxWidth >= 920;
+          final fieldWidth =
+              roomy ? (constraints.maxWidth - 24) / 3 : constraints.maxWidth;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: scheme.primary.withValues(alpha: 0.10),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.add_card_rounded,
+                      color: scheme.primary,
+                      size: 21,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Record income',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        Text(
+                          'Add salary, refunds, freelance income, or transfers received.',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SizedBox(
+                    width: fieldWidth,
+                    child: TextField(
+                      controller: _amountController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      decoration: InputDecoration(
+                        prefixText: '₹ ',
+                        prefixStyle: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        hintText: '0.00',
+                        labelText: 'Amount',
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: fieldWidth,
+                    child: TextField(
+                      controller: _noteController,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: InputDecoration(
+                        hintText: 'e.g., Salary, refund, bonus',
+                        labelText: 'Note',
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: fieldWidth,
+                    child: _buildWebDatePickerTile(theme),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Account',
+                          style: theme.textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Consumer<AccountProvider>(
+                          builder: (context, ap, _) {
+                            if (ap.accounts.isEmpty) {
+                              return Text(
+                                'Add an account in Settings > Accounts.',
+                                style: TextStyle(
+                                  color: scheme.onSurfaceVariant,
+                                  fontSize: 14,
+                                ),
+                              );
+                            }
+                            return Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: ap.accounts.map((a) {
+                                return AccountChip(
+                                  name: a.name,
+                                  selected: _selectedAccount == a.name,
+                                  onTap: () => setState(
+                                    () => _selectedAccount = a.name,
+                                  ),
+                                );
+                              }).toList(),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (roomy) const SizedBox(width: 18),
+                  if (roomy)
+                    SizedBox(
+                      width: 220,
+                      height: 48,
+                      child: _buildWebSaveIncomeButton(),
+                    ),
+                ],
+              ),
+              if (!roomy) ...[
+                const SizedBox(height: 16),
+                SizedBox(height: 48, child: _buildWebSaveIncomeButton()),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildWebDatePickerTile(ThemeData theme) {
+    final scheme = theme.colorScheme;
+    return InkWell(
+      onTap: _pickDate,
+      borderRadius: BorderRadius.circular(8),
+      child: Ink(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+        decoration: BoxDecoration(
+          color: scheme.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: theme.dividerColor),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Date',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    DateFormat('dd MMMM yyyy').format(_selectedDate),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: scheme.onSurface,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.expand_more_rounded,
+              size: 20,
+              color: scheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWebSaveIncomeButton() {
+    return FilledButton.icon(
+      onPressed: _save,
+      icon: const Icon(Icons.add, size: 20),
+      label: const Text(
+        'Add Income',
+        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+      ),
+      style: FilledButton.styleFrom(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWebHistoryPanel({
+    required String displayMonth,
+    required List<({String createdAt, Object item})> mergedHistory,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return WebPanel(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Income history',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$displayMonth - ${mergedHistory.length} entries',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (mergedHistory.isEmpty)
+            Container(
+              height: 260,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: theme.dividerColor),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.receipt_long_outlined,
+                    size: 40,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'No income added yet',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Add an income entry to start this month.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            ...mergedHistory.map(_buildWebHistoryItem),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebMonthStepper() {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            onPressed: _canGoIncomeHistoryPrev
+                ? () => _changeIncomeHistoryMonth(-1)
+                : null,
+            icon: const Icon(Icons.chevron_left_rounded),
+            tooltip: 'Earlier month',
+          ),
+          Text(
+            DateFormat('MMM yyyy').format(
+              DateTime.tryParse('$_currentMonth-01') ?? DateTime.now(),
+            ),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          IconButton(
+            onPressed: _canGoIncomeHistoryNext
+                ? () => _changeIncomeHistoryMonth(1)
+                : null,
+            icon: const Icon(Icons.chevron_right_rounded),
+            tooltip: 'Later month',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWebHistoryItem(({String createdAt, Object item}) row) {
+    final item = row.item;
+    if (item is IncomeEntry) {
+      final date = DateTime.tryParse(item.createdAt);
+      final dateStr =
+          date != null ? DateFormat('dd MMM yyyy, hh:mm a').format(date) : '';
+      return IncomeHistoryTile(
+        entry: item,
+        dateStr: dateStr,
+        isSelected: _selectedIncomeEntryId == item.id,
+        onDeselect: () => setState(() => _selectedIncomeEntryId = null),
+        onLongPress: item.id == null
+            ? null
+            : () => _onIncomeHistoryLongPress(context, item),
+      );
+    }
+
+    final expense = item as Expense;
+    return ExpenseTile(
+      expense: expense,
+      isSelected: _selectedExpenseId == expense.id,
+      onDeselect: () => setState(() => _selectedExpenseId = null),
+      onLongPress: expense.id == null
+          ? null
+          : () => _onReceivedExpenseLongPress(context, expense),
+    );
+  }
+
   Future<void> _onReceivedExpenseLongPress(
       BuildContext context, Expense expense) async {
     if (expense.id == null) return;
@@ -295,8 +814,6 @@ class _IncomeScreenState extends State<IncomeScreen> {
       isScrollControlled: true,
       showDragHandle: true,
       builder: (sheetContext) {
-        final theme = Theme.of(sheetContext);
-        final scheme = theme.colorScheme;
         return Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
@@ -370,11 +887,9 @@ class _IncomeScreenState extends State<IncomeScreen> {
                         ],
                         ListTile(
                           contentPadding: EdgeInsets.zero,
-                          leading: Icon(Icons.calendar_today,
-                              color: scheme.onSurfaceVariant),
                           title: Text(
                               DateFormat('dd MMMM yyyy').format(pickedDate)),
-                          trailing: const Icon(Icons.edit_calendar),
+                          trailing: const Icon(Icons.expand_more_rounded),
                           onTap: () async {
                             final d = await showDatePicker(
                               context: context,
@@ -451,365 +966,460 @@ class _IncomeScreenState extends State<IncomeScreen> {
     final mergedHistory = _mergedHistory();
     final currentBalance = _carryForward + _currentTotal - _monthExpense;
 
+    if (WebDashboardShell.useFor(context)) {
+      return WebDashboardShell(
+        selectedRoute: AppRoutes.income,
+        title: 'Income',
+        subtitle: 'Record salary, transfers received, and monthly inflow',
+        child: _buildWebIncomeBody(
+          displayMonth: displayMonth,
+          currentBalance: currentBalance,
+          mergedHistory: mergedHistory,
+        ),
+      );
+    }
+
+    final body = CustomScrollView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.green.shade400.withValues(alpha: 0.28),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            displayMonth,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: scheme.onSurface,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Current balance',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: scheme.onSurfaceVariant,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '₹ ${formatRupeesTwoDecimalsFromDouble(currentBalance)}',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: currentBalance >= 0
+                              ? Colors.green.shade800
+                              : Colors.red.shade700,
+                          height: 1.05,
+                        ),
+                      ),
+                      if (_carryForward != 0) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Includes carry forward ₹ ${formatRupeesTwoDecimalsFromDouble(_carryForward)}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                      Divider(
+                        color: Colors.green.shade400.withValues(alpha: 0.28),
+                        height: 18,
+                      ),
+                      _incomeSummaryRow(
+                        label: 'Total income',
+                        amount: _currentTotal,
+                        icon: Icons.south_west_rounded,
+                        color: const Color(0xFF2563EB),
+                      ),
+                      const SizedBox(height: 6),
+                      _incomeSummaryRow(
+                        label: 'Total expense',
+                        amount: _monthExpense,
+                        icon: Icons.north_east_rounded,
+                        color: const Color(0xFFDC2626),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: _amountController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  style: const TextStyle(
+                      fontSize: 22, fontWeight: FontWeight.bold),
+                  decoration: InputDecoration(
+                    prefixText: '₹ ',
+                    prefixStyle: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    hintText: '0.00',
+                    labelText: 'Amount',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Account',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                Consumer<AccountProvider>(
+                  builder: (context, ap, _) {
+                    if (ap.accounts.isEmpty) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          'Add an account in Settings → Accounts.',
+                          style: TextStyle(
+                            color: scheme.onSurfaceVariant,
+                            fontSize: 14,
+                          ),
+                        ),
+                      );
+                    }
+                    return Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: ap.accounts.map((a) {
+                        return AccountChip(
+                          name: a.name,
+                          selected: _selectedAccount == a.name,
+                          onTap: () =>
+                              setState(() => _selectedAccount = a.name),
+                        );
+                      }).toList(),
+                    );
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _noteController,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: InputDecoration(
+                    hintText: 'e.g., Salary, Freelance, Bonus',
+                    labelText: 'Note (optional)',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: _pickDate,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: scheme.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: theme.dividerColor),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          DateFormat('dd MMMM yyyy').format(_selectedDate),
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: scheme.onSurface,
+                          ),
+                        ),
+                        const Spacer(),
+                        Icon(
+                          Icons.expand_more_rounded,
+                          size: 20,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: FilledButton.icon(
+                    onPressed: _save,
+                    icon: const Icon(Icons.add, size: 20),
+                    label: const Text(
+                      'Add Income',
+                      style:
+                          TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    ),
+                    style: FilledButton.styleFrom(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        onPressed: _canGoIncomeHistoryPrev
+                            ? () => _changeIncomeHistoryMonth(-1)
+                            : null,
+                        icon: Icon(
+                          Icons.chevron_left_rounded,
+                          size: 22,
+                          color: _canGoIncomeHistoryPrev
+                              ? scheme.onSurfaceVariant
+                              : scheme.outlineVariant,
+                        ),
+                        tooltip: 'Earlier month',
+                        visualDensity: VisualDensity.compact,
+                        style: IconButton.styleFrom(
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          minimumSize: const Size(32, 32),
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          DateFormat('MMM yyyy').format(
+                            DateTime.tryParse('$_currentMonth-01') ??
+                                DateTime.now(),
+                          ),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: scheme.onSurfaceVariant,
+                            letterSpacing: -0.2,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: _canGoIncomeHistoryNext
+                            ? () => _changeIncomeHistoryMonth(1)
+                            : null,
+                        icon: Icon(
+                          Icons.chevron_right_rounded,
+                          size: 22,
+                          color: _canGoIncomeHistoryNext
+                              ? scheme.onSurfaceVariant
+                              : scheme.outlineVariant,
+                        ),
+                        tooltip: 'Later month',
+                        visualDensity: VisualDensity.compact,
+                        style: IconButton.styleFrom(
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          minimumSize: const Size(32, 32),
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 20)),
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          sliver: SliverToBoxAdapter(
+            child: Row(
+              children: [
+                Text(
+                  'History',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '(${mergedHistory.length} entries)',
+                  style: TextStyle(
+                    color: scheme.onSurfaceVariant,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 8)),
+        if (mergedHistory.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(
+              child: Text(
+                'No income added yet',
+                style: TextStyle(
+                  color: scheme.onSurfaceVariant,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 88),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final row = mergedHistory[index];
+                  final item = row.item;
+                  if (item is IncomeEntry) {
+                    final entry = item;
+                    final date = DateTime.tryParse(entry.createdAt);
+                    final dateStr = date != null
+                        ? DateFormat('dd MMM yyyy, hh:mm a').format(date)
+                        : '';
+                    return IncomeHistoryTile(
+                      entry: entry,
+                      dateStr: dateStr,
+                      isSelected: _selectedIncomeEntryId == entry.id,
+                      onDeselect: () =>
+                          setState(() => _selectedIncomeEntryId = null),
+                      onLongPress: entry.id == null
+                          ? null
+                          : () => _onIncomeHistoryLongPress(context, entry),
+                    );
+                  }
+                  final expense = item as Expense;
+                  return ExpenseTile(
+                    expense: expense,
+                    isSelected: _selectedExpenseId == expense.id,
+                    onDeselect: () => setState(() => _selectedExpenseId = null),
+                    onLongPress: expense.id == null
+                        ? null
+                        : () => _onReceivedExpenseLongPress(context, expense),
+                  );
+                },
+                childCount: mergedHistory.length,
+              ),
+            ),
+          ),
+      ],
+    );
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Income'),
         centerTitle: true,
       ),
       resizeToAvoidBottomInset: true,
-      body: CustomScrollView(
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-            sliver: SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                    decoration: BoxDecoration(
-                      color: scheme.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.green.shade400.withValues(alpha: 0.28),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.calendar_month_rounded,
-                                color: Colors.green.shade700, size: 17),
-                            const SizedBox(width: 6),
-                            Text(
-                              displayMonth,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: scheme.onSurface,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Current balance',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: scheme.onSurfaceVariant,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '₹ ${formatRupeesTwoDecimalsFromDouble(currentBalance)}',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            color: currentBalance >= 0
-                                ? Colors.green.shade800
-                                : Colors.red.shade700,
-                            height: 1.05,
-                          ),
-                        ),
-                        if (_carryForward != 0) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            'Includes carry forward ₹ ${formatRupeesTwoDecimalsFromDouble(_carryForward)}',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                        Divider(
-                          color: Colors.green.shade400.withValues(alpha: 0.28),
-                          height: 18,
-                        ),
-                        _incomeSummaryRow(
-                          label: 'Total income',
-                          amount: _currentTotal,
-                          icon: Icons.south_west_rounded,
-                          color: const Color(0xFF2563EB),
-                        ),
-                        const SizedBox(height: 6),
-                        _incomeSummaryRow(
-                          label: 'Total expense',
-                          amount: _monthExpense,
-                          icon: Icons.north_east_rounded,
-                          color: const Color(0xFFDC2626),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  TextField(
-                    controller: _amountController,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    style: const TextStyle(
-                        fontSize: 22, fontWeight: FontWeight.bold),
-                    decoration: InputDecoration(
-                      prefixText: '₹ ',
-                      prefixStyle: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      hintText: '0.00',
-                      labelText: 'Amount',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Account',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  Consumer<AccountProvider>(
-                    builder: (context, ap, _) {
-                      if (ap.accounts.isEmpty) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Text(
-                            'Add an account in Settings → Accounts.',
-                            style: TextStyle(
-                              color: scheme.onSurfaceVariant,
-                              fontSize: 14,
-                            ),
-                          ),
-                        );
-                      }
-                      return Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: ap.accounts.map((a) {
-                          return AccountChip(
-                            name: a.name,
-                            selected: _selectedAccount == a.name,
-                            onTap: () =>
-                                setState(() => _selectedAccount = a.name),
-                          );
-                        }).toList(),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _noteController,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(
-                      hintText: 'e.g., Salary, Freelance, Bonus',
-                      labelText: 'Note (optional)',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  GestureDetector(
-                    onTap: _pickDate,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: scheme.surface,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: theme.dividerColor),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.calendar_today,
-                              size: 20, color: scheme.onSurfaceVariant),
-                          const SizedBox(width: 12),
-                          Text(
-                            DateFormat('dd MMMM yyyy').format(_selectedDate),
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: scheme.onSurface,
-                            ),
-                          ),
-                          const Spacer(),
-                          Icon(Icons.edit_calendar,
-                              size: 18, color: scheme.onSurfaceVariant),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: FilledButton.icon(
-                      onPressed: _save,
-                      icon: const Icon(Icons.add, size: 20),
-                      label: const Text(
-                        'Add Income',
-                        style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w600),
-                      ),
-                      style: FilledButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Center(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          onPressed: _canGoIncomeHistoryPrev
-                              ? () => _changeIncomeHistoryMonth(-1)
-                              : null,
-                          icon: Icon(
-                            Icons.chevron_left_rounded,
-                            size: 22,
-                            color: _canGoIncomeHistoryPrev
-                                ? scheme.onSurfaceVariant
-                                : scheme.outlineVariant,
-                          ),
-                          tooltip: 'Earlier month',
-                          visualDensity: VisualDensity.compact,
-                          style: IconButton.styleFrom(
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            minimumSize: const Size(32, 32),
-                            padding: EdgeInsets.zero,
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Text(
-                            DateFormat('MMM yyyy').format(
-                              DateTime.tryParse('$_currentMonth-01') ??
-                                  DateTime.now(),
-                            ),
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: scheme.onSurfaceVariant,
-                              letterSpacing: -0.2,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: _canGoIncomeHistoryNext
-                              ? () => _changeIncomeHistoryMonth(1)
-                              : null,
-                          icon: Icon(
-                            Icons.chevron_right_rounded,
-                            size: 22,
-                            color: _canGoIncomeHistoryNext
-                                ? scheme.onSurfaceVariant
-                                : scheme.outlineVariant,
-                          ),
-                          tooltip: 'Later month',
-                          visualDensity: VisualDensity.compact,
-                          style: IconButton.styleFrom(
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            minimumSize: const Size(32, 32),
-                            padding: EdgeInsets.zero,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+      body: body,
+    );
+  }
+}
+
+class _WebIncomeKpiCard extends StatelessWidget {
+  const _WebIncomeKpiCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.accent,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color accent;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.7)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.11),
+              borderRadius: BorderRadius.circular(8),
             ),
+            child: Icon(icon, color: accent, size: 22),
           ),
-          const SliverToBoxAdapter(child: SizedBox(height: 20)),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            sliver: SliverToBoxAdapter(
-              child: Row(
-                children: [
-                  Text(
-                    'History',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '(${mergedHistory.length} entries)',
-                    style: TextStyle(
-                      color: scheme.onSurfaceVariant,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 8)),
-          if (mergedHistory.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(
-                child: Text(
-                  'No income added yet',
-                  style: TextStyle(
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelMedium?.copyWith(
                     color: scheme.onSurfaceVariant,
-                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-              ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 88),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final row = mergedHistory[index];
-                    final item = row.item;
-                    if (item is IncomeEntry) {
-                      final entry = item;
-                      final date = DateTime.tryParse(entry.createdAt);
-                      final dateStr = date != null
-                          ? DateFormat('dd MMM yyyy, hh:mm a').format(date)
-                          : '';
-                      return IncomeHistoryTile(
-                        entry: entry,
-                        dateStr: dateStr,
-                        isSelected: _selectedIncomeEntryId == entry.id,
-                        onDeselect: () =>
-                            setState(() => _selectedIncomeEntryId = null),
-                        onLongPress: entry.id == null
-                            ? null
-                            : () => _onIncomeHistoryLongPress(context, entry),
-                      );
-                    }
-                    final expense = item as Expense;
-                    return ExpenseTile(
-                      expense: expense,
-                      isSelected: _selectedExpenseId == expense.id,
-                      onDeselect: () =>
-                          setState(() => _selectedExpenseId = null),
-                      onLongPress: expense.id == null
-                          ? null
-                          : () => _onReceivedExpenseLongPress(context, expense),
-                    );
-                  },
-                  childCount: mergedHistory.length,
+                const SizedBox(height: 3),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      value,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: accent,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
+          ),
         ],
       ),
     );

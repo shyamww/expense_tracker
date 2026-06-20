@@ -289,11 +289,11 @@ class _CalendarViewState extends State<CalendarView> {
                     final hasEntry = datesWithActivity.contains(dateStr);
                     if (!hasEntry) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: const Text('No entry for this day'),
+                        const SnackBar(
+                          content: Text('No entry for this day'),
                           behavior: SnackBarBehavior.floating,
-                          margin: const EdgeInsets.fromLTRB(16, 0, 16, 88),
-                          duration: const Duration(seconds: 2),
+                          margin: EdgeInsets.fromLTRB(16, 0, 16, 88),
+                          duration: Duration(seconds: 2),
                         ),
                       );
                       return;

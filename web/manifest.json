@@ -1,12 +1,12 @@
 {
-    "name": "expense_tracker",
-    "short_name": "expense_tracker",
+    "name": "Expense Tracker",
+    "short_name": "Expenses",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#F8F9FB",
+    "theme_color": "#4F46E5",
+    "description": "Track expenses, income, accounts, and reports locally in your browser.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

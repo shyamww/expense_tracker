@@ -100,6 +100,14 @@ class IncomeHistoryTile extends StatelessWidget {
                     color: Colors.green.shade700,
                   ),
                 ),
+                if (onLongPress != null) ...[
+                  const SizedBox(width: 4),
+                  IconButton(
+                    icon: const Icon(Icons.more_vert_rounded),
+                    tooltip: 'Actions',
+                    onPressed: onLongPress,
+                  ),
+                ],
               ],
             ),
           ),

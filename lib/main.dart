@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'app_routes.dart';
 import 'providers/expense_provider.dart';
 import 'providers/income_provider.dart';
 import 'providers/category_provider.dart';
@@ -9,17 +12,24 @@ import 'providers/app_lock_provider.dart';
 import 'providers/app_navigation_hub.dart';
 import 'providers/theme_provider.dart';
 import 'screens/home_screen.dart';
+import 'screens/income_screen.dart';
+import 'screens/report_screen.dart';
+import 'screens/accounts_list_screen.dart';
+import 'screens/account_detail_screen.dart';
+import 'screens/settings_screen.dart';
 import 'screens/lock_screen.dart';
+import 'services/browser_route.dart';
 import 'services/expense_reminder_service.dart';
 import 'package:flutter/services.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 🔒 LOCK ORIENTATION HERE
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
+  if (!kIsWeb) {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
+  }
 
   final appNavHub = AppNavigationHub();
   final themeProvider = ThemeProvider();
@@ -30,18 +40,29 @@ Future<void> main() async {
     await ExpenseReminderService.instance.initialize();
     await ExpenseReminderService.instance.rescheduleIfEnabled();
   }
-  runApp(ExpenseTrackerApp(navHub: appNavHub, themeProvider: themeProvider));
+  final initialRoute =
+      kIsWeb ? readBrowserRoute(AppRoutes.homeDaily) : AppRoutes.homeDaily;
+  if (kIsWeb) replaceBrowserRoute(initialRoute);
+
+  runApp(ExpenseTrackerApp(
+    navHub: appNavHub,
+    themeProvider: themeProvider,
+    initialRoute: initialRoute,
+  ));
 }
 
 class ExpenseTrackerApp extends StatelessWidget {
-  const ExpenseTrackerApp({
+  ExpenseTrackerApp({
     super.key,
     required this.navHub,
     required this.themeProvider,
+    required this.initialRoute,
   });
 
   final AppNavigationHub navHub;
   final ThemeProvider themeProvider;
+  final String initialRoute;
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
   ThemeData _buildTheme(Brightness brightness) {
     final isDark = brightness == Brightness.dark;
@@ -118,6 +139,42 @@ class ExpenseTrackerApp extends StatelessWidget {
     );
   }
 
+  Route<dynamic> _buildRoute(RouteSettings settings) {
+    final routeName = settings.name ?? AppRoutes.homeDaily;
+    final accountName = AppRoutes.accountNameFromRoute(routeName);
+    final Widget page = accountName != null
+        ? AccountDetailScreen(accountName: accountName)
+        : switch (routeName) {
+            AppRoutes.root ||
+            AppRoutes.home ||
+            AppRoutes.homeDaily =>
+              const HomeScreen(
+                initialTabIndex: 0,
+              ),
+            AppRoutes.homeCalendar => const HomeScreen(initialTabIndex: 1),
+            AppRoutes.homeMonthly => const HomeScreen(initialTabIndex: 2),
+            AppRoutes.income => const IncomeScreen(),
+            AppRoutes.reports => const ReportScreen(),
+            AppRoutes.accounts => const AccountsListScreen(),
+            AppRoutes.settings => const SettingsScreen(),
+            _ => const HomeScreen(initialTabIndex: 0),
+          };
+
+    if (kIsWeb) {
+      return PageRouteBuilder<dynamic>(
+        settings: settings,
+        pageBuilder: (_, __, ___) => page,
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      );
+    }
+
+    return MaterialPageRoute<dynamic>(
+      settings: settings,
+      builder: (_) => page,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -138,23 +195,79 @@ class ExpenseTrackerApp extends StatelessWidget {
             theme: _buildTheme(Brightness.light),
             darkTheme: _buildTheme(Brightness.dark),
             themeMode: theme.themeMode,
+            initialRoute: initialRoute,
+            navigatorKey: _navigatorKey,
+            onGenerateRoute: _buildRoute,
+            onGenerateInitialRoutes: (initialRoute) => [
+              _buildRoute(RouteSettings(name: initialRoute)),
+            ],
             builder: (context, child) {
               if (!lock.isReady) {
                 return const Scaffold(
                   body: Center(child: CircularProgressIndicator()),
                 );
               }
-              return Stack(
+              final body = Stack(
                 children: [
                   child!,
                   if (lock.shouldShowLock) const LockScreen(),
                 ],
               );
+              if (!kIsWeb) return body;
+              return BrowserRouteSync(
+                navigatorKey: _navigatorKey,
+                initialRoute: initialRoute,
+                child: body,
+              );
             },
-            home: const HomeScreen(),
           );
         },
       ),
     );
   }
+}
+
+class BrowserRouteSync extends StatefulWidget {
+  const BrowserRouteSync({
+    super.key,
+    required this.navigatorKey,
+    required this.initialRoute,
+    required this.child,
+  });
+
+  final GlobalKey<NavigatorState> navigatorKey;
+  final String initialRoute;
+  final Widget child;
+
+  @override
+  State<BrowserRouteSync> createState() => _BrowserRouteSyncState();
+}
+
+class _BrowserRouteSyncState extends State<BrowserRouteSync> {
+  StreamSubscription<String>? _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      replaceBrowserRoute(widget.initialRoute);
+    });
+    _subscription =
+        browserRouteChanges(AppRoutes.homeDaily).listen(_openBrowserRoute);
+  }
+
+  void _openBrowserRoute(String route) {
+    final navigator = widget.navigatorKey.currentState;
+    if (navigator == null) return;
+    navigator.pushNamedAndRemoveUntil(route, (route) => false);
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

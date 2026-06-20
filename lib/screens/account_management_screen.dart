@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../app_routes.dart';
 import '../models/app_account.dart';
 import '../providers/account_provider.dart';
 import '../providers/expense_provider.dart';
 import '../providers/income_provider.dart';
+import '../widgets/web_dashboard_shell.dart';
 
 class AccountManagementScreen extends StatefulWidget {
   const AccountManagementScreen({super.key});
@@ -27,6 +29,31 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+
+    if (WebDashboardShell.useFor(context)) {
+      return WebDashboardShell(
+        selectedRoute: AppRoutes.settings,
+        title: 'Accounts',
+        subtitle: 'Manage banks, cards, and cash used in transactions',
+        actions: [
+          FilledButton.icon(
+            onPressed: () => _openEditor(context, null),
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Add account'),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+          ),
+        ],
+        child: Consumer<AccountProvider>(
+          builder: (context, ap, _) => _buildWebBody(context, ap),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Accounts'),
@@ -107,7 +134,154 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
     );
   }
 
+  Widget _buildWebBody(BuildContext context, AccountProvider ap) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final list = ap.accounts;
+    final archived = ap.archivedAccounts;
+
+    Widget emptyState() {
+      return SizedBox(
+        height: 360,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.account_balance_outlined,
+                size: 48,
+                color: scheme.onSurfaceVariant,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'No accounts yet',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Add a bank, card, or cash account to start tracking balances.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    Widget section(String title, List<AppAccount> accounts,
+        {bool archivedSection = false}) {
+      if (accounts.isEmpty) return const SizedBox.shrink();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            title,
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...accounts.map(
+            (a) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _AccountRow(
+                account: a,
+                archived: archivedSection,
+                onEdit: () => _openEditor(context, a),
+                onArchive: archivedSection
+                    ? () => _restoreAccount(context, a)
+                    : () => _archiveAccount(context, a),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: WebPanel(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+        child: list.isEmpty && archived.isEmpty
+            ? emptyState()
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: scheme.primary.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.account_balance_rounded,
+                          color: scheme.primary,
+                          size: 21,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Account list',
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            Text(
+                              '${list.length} active, ${archived.length} archived',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  section('Active accounts', list),
+                  if (archived.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    section('Archived', archived, archivedSection: true),
+                  ],
+                ],
+              ),
+      ),
+    );
+  }
+
   Future<void> _openEditor(BuildContext context, AppAccount? existing) async {
+    if (WebDashboardShell.useFor(context)) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => Dialog(
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 520,
+              maxHeight: MediaQuery.sizeOf(ctx).height - 80,
+            ),
+            child: _AccountEditorSheet(existing: existing),
+          ),
+        ),
+      );
+      return;
+    }
+
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
