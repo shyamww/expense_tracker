@@ -13,3 +13,6 @@ key.properties
 upload-keystore.jks
 **/*.keystore
 **/*.jks
+
+# Keep service configuration files with app identifiers/API keys local.
+app/google-services.json

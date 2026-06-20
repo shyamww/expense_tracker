@@ -43,3 +43,15 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Signing credentials and service config files must stay local.
+**/key.properties
+**/upload-keystore.jks
+**/*.jks
+**/*.keystore
+**/*.p12
+**/*.mobileprovision
+**/*.provisionprofile
+**/*.p8
+**/GoogleService-Info.plist
+**/google-services.json
