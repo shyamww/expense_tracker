@@ -24,6 +24,7 @@ class SettingsScreen extends StatelessWidget {
 
   static String _cloudSubtitle(CloudAuthProvider cloud) {
     if (!cloud.isConfigured) return 'Not configured in this build';
+    if (cloud.setupError != null) return 'Cloud setup needs attention';
     if (cloud.isSignedIn) return cloud.email ?? 'Connected to Supabase';
     return 'Sign in to sync with Supabase';
   }

@@ -183,6 +183,33 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
       );
     }
 
+    final setupError = auth.setupError;
+    if (setupError != null) {
+      return _Panel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.error_outline_rounded, color: scheme.error),
+            const SizedBox(height: 12),
+            Text(
+              'Cloud sync could not start.',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              setupError,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),

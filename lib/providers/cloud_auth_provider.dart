@@ -15,6 +15,7 @@ class CloudAuthProvider extends ChangeNotifier {
   bool get isSignedIn => user != null;
   User? get user => _session?.user ?? SupabaseService.currentUser;
   String? get email => user?.email;
+  String? get setupError => SupabaseService.initializationError;
 
   Future<void> load() async {
     if (!isConfigured || !SupabaseService.isReady) {
@@ -35,7 +36,9 @@ class CloudAuthProvider extends ChangeNotifier {
     required String password,
   }) async {
     final client = SupabaseService.client;
-    if (client == null) throw StateError('supabase_not_configured');
+    if (client == null) {
+      throw StateError(setupError ?? 'supabase_not_configured');
+    }
     final res = await client.auth.signInWithPassword(
       email: email.trim(),
       password: password,
@@ -49,7 +52,9 @@ class CloudAuthProvider extends ChangeNotifier {
     required String password,
   }) async {
     final client = SupabaseService.client;
-    if (client == null) throw StateError('supabase_not_configured');
+    if (client == null) {
+      throw StateError(setupError ?? 'supabase_not_configured');
+    }
     final res = await client.auth.signUp(
       email: email.trim(),
       password: password,
