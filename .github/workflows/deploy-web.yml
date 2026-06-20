@@ -21,9 +21,10 @@ jobs:
 
       - run: flutter pub get
 
-      - run: flutter build web --release --csp --no-web-resources-cdn --base-href "/expense_tracker/" --dart-define=WEB3FORMS_ACCESS_KEY="${WEB3FORMS_ACCESS_KEY}"
+      - run: flutter build web --release --csp --no-web-resources-cdn --base-href "/expense_tracker/" --dart-define=WEB3FORMS_ACCESS_KEY="${WEB3FORMS_ACCESS_KEY}" --dart-define=SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY}"
         env:
           WEB3FORMS_ACCESS_KEY: ${{ secrets.WEB3FORMS_ACCESS_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
       - uses: actions/upload-pages-artifact@v3
         with:

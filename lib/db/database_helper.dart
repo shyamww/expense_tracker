@@ -14,6 +14,7 @@ import '../data/account_seed_data.dart';
 import '../core/money.dart';
 import '../core/transfer_note.dart';
 import '../constants/reporting_category_names.dart';
+import '../services/supabase_service.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -23,6 +24,7 @@ class DatabaseHelper {
   // ── Web browser storage ──
   static const String _webStoreKey = 'expense_tracker.web_store.v1';
   static const int _webStoreVersion = 1;
+  static const String _cloudStoreTable = 'expense_tracker_stores';
 
   final List<Map<String, dynamic>> _webExpenses = [];
   final List<Map<String, dynamic>> _webIncome = [];
@@ -35,6 +37,10 @@ class DatabaseHelper {
   int _nextCategoryId = 1;
   int _nextAccountId = 1;
   bool _webStoreLoaded = false;
+  String? _cloudStoreLoadedForUser;
+  String? _cloudSyncError;
+
+  String? get cloudSyncError => _cloudSyncError;
 
   // ── Mobile SQLite ──
   Database? _database;
@@ -53,9 +59,25 @@ class DatabaseHelper {
   }
 
   Future<void> _ensureWebStoreLoaded() async {
-    if (!kIsWeb || _webStoreLoaded) return;
-    _webStoreLoaded = true;
+    if (!kIsWeb) return;
+    final cloudUserId = SupabaseService.currentUserId;
+    if (_webStoreLoaded && _cloudStoreLoadedForUser == cloudUserId) return;
 
+    if (!_webStoreLoaded) {
+      _webStoreLoaded = true;
+      await _loadWebStoreFromLocalPrefs();
+    }
+
+    await _loadCloudStoreForUser(cloudUserId);
+  }
+
+  Future<void> reconnectCloudStore() async {
+    if (!kIsWeb) return;
+    _cloudStoreLoadedForUser = null;
+    await _ensureWebStoreLoaded();
+  }
+
+  Future<void> _loadWebStoreFromLocalPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_webStoreKey);
     if (raw == null || raw.isEmpty) return;
@@ -63,51 +85,111 @@ class DatabaseHelper {
     try {
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return;
-      final data = Map<String, dynamic>.from(decoded);
-
-      _webExpenses
-        ..clear()
-        ..addAll(_webRowsFrom(data['expenses']));
-      _webIncome
-        ..clear()
-        ..addAll(_webRowsFrom(data['income']));
-      _webIncomeHistory
-        ..clear()
-        ..addAll(_webRowsFrom(data['income_history']));
-      _webExpenseCategories
-        ..clear()
-        ..addAll(_webRowsFrom(data['expense_categories']));
-      _webAccounts
-        ..clear()
-        ..addAll(_webRowsFrom(data['accounts']));
-
-      _nextExpenseId = _nextWebId(data['next_expense_id'], _webExpenses);
-      _nextIncomeId = _nextWebId(data['next_income_id'], _webIncome);
-      _nextIncomeHistoryId =
-          _nextWebId(data['next_income_history_id'], _webIncomeHistory);
-      _nextCategoryId =
-          _nextWebId(data['next_category_id'], _webExpenseCategories);
-      _nextAccountId = _nextWebId(data['next_account_id'], _webAccounts);
-
-      _normalizeWebRows();
+      _applyWebStoreSnapshot(Map<String, dynamic>.from(decoded));
     } catch (_) {
-      _webExpenses.clear();
-      _webIncome.clear();
-      _webIncomeHistory.clear();
-      _webExpenseCategories.clear();
-      _webAccounts.clear();
-      _nextExpenseId = 1;
-      _nextIncomeId = 1;
-      _nextIncomeHistoryId = 1;
-      _nextCategoryId = 1;
-      _nextAccountId = 1;
+      _resetWebStore();
     }
   }
 
   Future<void> _persistWebStore() async {
     if (!kIsWeb) return;
+    await _persistWebStoreLocally();
+    await _persistCloudStore();
+  }
+
+  Future<void> _persistWebStoreLocally() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_webStoreKey, jsonEncode(_webStoreSnapshot()));
+  }
+
+  Future<void> _loadCloudStoreForUser(String? userId) async {
+    if (userId == null || !SupabaseService.isReady) {
+      _cloudStoreLoadedForUser = userId;
+      return;
+    }
+    if (_cloudStoreLoadedForUser == userId) return;
+
+    final client = SupabaseService.client;
+    if (client == null) return;
+
+    try {
+      final row = await client
+          .from(_cloudStoreTable)
+          .select('data')
+          .eq('user_id', userId)
+          .maybeSingle();
+      final cloudData = row?['data'];
+      if (cloudData is Map) {
+        _applyWebStoreSnapshot(Map<String, dynamic>.from(cloudData));
+        await _persistWebStoreLocally();
+      } else {
+        await _persistCloudStore();
+      }
+      _cloudStoreLoadedForUser = userId;
+      _cloudSyncError = null;
+    } catch (e) {
+      _cloudStoreLoadedForUser = userId;
+      _cloudSyncError = e.toString();
+    }
+  }
+
+  Future<void> _persistCloudStore() async {
+    final userId = SupabaseService.currentUserId;
+    final client = SupabaseService.client;
+    if (userId == null || client == null) return;
+
+    try {
+      await client.from(_cloudStoreTable).upsert({
+        'user_id': userId,
+        'data': _webStoreSnapshot(),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      });
+      _cloudStoreLoadedForUser = userId;
+      _cloudSyncError = null;
+    } catch (e) {
+      _cloudSyncError = e.toString();
+    }
+  }
+
+  void _applyWebStoreSnapshot(Map<String, dynamic> data) {
+    _webExpenses
+      ..clear()
+      ..addAll(_webRowsFrom(data['expenses']));
+    _webIncome
+      ..clear()
+      ..addAll(_webRowsFrom(data['income']));
+    _webIncomeHistory
+      ..clear()
+      ..addAll(_webRowsFrom(data['income_history']));
+    _webExpenseCategories
+      ..clear()
+      ..addAll(_webRowsFrom(data['expense_categories']));
+    _webAccounts
+      ..clear()
+      ..addAll(_webRowsFrom(data['accounts']));
+
+    _nextExpenseId = _nextWebId(data['next_expense_id'], _webExpenses);
+    _nextIncomeId = _nextWebId(data['next_income_id'], _webIncome);
+    _nextIncomeHistoryId =
+        _nextWebId(data['next_income_history_id'], _webIncomeHistory);
+    _nextCategoryId =
+        _nextWebId(data['next_category_id'], _webExpenseCategories);
+    _nextAccountId = _nextWebId(data['next_account_id'], _webAccounts);
+
+    _normalizeWebRows();
+  }
+
+  void _resetWebStore() {
+    _webExpenses.clear();
+    _webIncome.clear();
+    _webIncomeHistory.clear();
+    _webExpenseCategories.clear();
+    _webAccounts.clear();
+    _nextExpenseId = 1;
+    _nextIncomeId = 1;
+    _nextIncomeHistoryId = 1;
+    _nextCategoryId = 1;
+    _nextAccountId = 1;
   }
 
   List<Map<String, dynamic>> _webRowsFrom(Object? raw) {

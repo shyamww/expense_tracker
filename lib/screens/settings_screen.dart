@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../app_routes.dart';
 import '../providers/app_lock_provider.dart';
+import '../providers/cloud_auth_provider.dart';
 import '../providers/theme_provider.dart';
 import '../services/app_lock_service.dart';
 import '../services/expense_reminder_service.dart';
@@ -12,6 +13,7 @@ import '../widgets/feedback_form_sheet.dart';
 import '../widgets/web_dashboard_shell.dart';
 import 'backup_screen.dart';
 import 'category_management_screen.dart';
+import 'cloud_sync_screen.dart';
 import 'account_management_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -20,7 +22,14 @@ class SettingsScreen extends StatelessWidget {
   static const String _appVersion = '1.0.0';
   static const String _developerName = 'Shyam Gautam';
 
+  static String _cloudSubtitle(CloudAuthProvider cloud) {
+    if (!cloud.isConfigured) return 'Not configured in this build';
+    if (cloud.isSignedIn) return cloud.email ?? 'Connected to Supabase';
+    return 'Sign in to sync with Supabase';
+  }
+
   Widget _buildWebSettingsBody(BuildContext context) {
+    final cloud = context.watch<CloudAuthProvider>();
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: LayoutBuilder(
@@ -86,9 +95,24 @@ class SettingsScreen extends StatelessWidget {
                     context,
                     icon: Icons.folder_outlined,
                     title: 'Where your data lives',
-                    subtitle:
-                        'Stored locally in this browser. Backup moves data between browsers or devices.',
+                    subtitle: cloud.isSignedIn
+                        ? 'Stored locally and synced to Supabase'
+                        : 'Stored locally in this browser',
                     trailing: const Icon(Icons.lock_outline_rounded, size: 18),
+                  ),
+                  _buildWebSettingTile(
+                    context,
+                    icon: Icons.cloud_sync_outlined,
+                    title: 'Cloud sync',
+                    subtitle: _cloudSubtitle(cloud),
+                    onTap: () {
+                      Navigator.push<void>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const CloudSyncScreen(),
+                        ),
+                      );
+                    },
                   ),
                   _buildWebSettingTile(
                     context,
@@ -310,6 +334,7 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final cloud = context.watch<CloudAuthProvider>();
     final body = ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
@@ -387,11 +412,25 @@ class SettingsScreen extends StatelessWidget {
         ListTile(
           leading: Icon(Icons.folder_outlined, color: scheme.onSurfaceVariant),
           title: const Text('Where your data lives'),
-          subtitle: const Text(
-            kIsWeb
-                ? 'Stored locally in this browser. Use Backup to move data between browsers or devices.'
-                : 'Stored locally on this device. Use Backup to export or restore JSON.',
+          subtitle: Text(
+            cloud.isSignedIn
+                ? 'Stored locally and synced to Supabase.'
+                : kIsWeb
+                    ? 'Stored locally in this browser.'
+                    : 'Stored locally on this device.',
           ),
+        ),
+        ListTile(
+          leading:
+              Icon(Icons.cloud_sync_outlined, color: scheme.onSurfaceVariant),
+          title: const Text('Cloud sync'),
+          subtitle: Text(_cloudSubtitle(cloud)),
+          onTap: () {
+            Navigator.push<void>(
+              context,
+              MaterialPageRoute(builder: (_) => const CloudSyncScreen()),
+            );
+          },
         ),
         ListTile(
           leading: Icon(Icons.cloud_outlined, color: scheme.onSurfaceVariant),

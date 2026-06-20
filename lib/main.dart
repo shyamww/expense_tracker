@@ -10,16 +10,19 @@ import 'providers/category_provider.dart';
 import 'providers/account_provider.dart';
 import 'providers/app_lock_provider.dart';
 import 'providers/app_navigation_hub.dart';
+import 'providers/cloud_auth_provider.dart';
 import 'providers/theme_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/income_screen.dart';
 import 'screens/report_screen.dart';
 import 'screens/accounts_list_screen.dart';
 import 'screens/account_detail_screen.dart';
+import 'screens/cloud_sync_screen.dart';
 import 'screens/settings_screen.dart';
 import 'screens/lock_screen.dart';
 import 'services/browser_route.dart';
 import 'services/expense_reminder_service.dart';
+import 'services/supabase_service.dart';
 import 'package:flutter/services.dart';
 
 Future<void> main() async {
@@ -33,7 +36,10 @@ Future<void> main() async {
 
   final appNavHub = AppNavigationHub();
   final themeProvider = ThemeProvider();
+  await SupabaseService.initialize();
+  final cloudAuthProvider = CloudAuthProvider();
   await themeProvider.load();
+  await cloudAuthProvider.load();
   if (!kIsWeb) {
     ExpenseReminderService.onReminderNotificationTap =
         () => appNavHub.requestHomeDashboard();
@@ -47,6 +53,7 @@ Future<void> main() async {
   runApp(ExpenseTrackerApp(
     navHub: appNavHub,
     themeProvider: themeProvider,
+    cloudAuthProvider: cloudAuthProvider,
     initialRoute: initialRoute,
   ));
 }
@@ -56,11 +63,13 @@ class ExpenseTrackerApp extends StatelessWidget {
     super.key,
     required this.navHub,
     required this.themeProvider,
+    required this.cloudAuthProvider,
     required this.initialRoute,
   });
 
   final AppNavigationHub navHub;
   final ThemeProvider themeProvider;
+  final CloudAuthProvider cloudAuthProvider;
   final String initialRoute;
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
@@ -154,6 +163,7 @@ class ExpenseTrackerApp extends StatelessWidget {
             AppRoutes.income => const IncomeScreen(),
             AppRoutes.reports => const ReportScreen(),
             AppRoutes.accounts => const AccountsListScreen(),
+            AppRoutes.cloudSync => const CloudSyncScreen(),
             AppRoutes.settings => const SettingsScreen(),
             _ => const HomeScreen(initialTabIndex: 0),
           };
@@ -179,6 +189,9 @@ class ExpenseTrackerApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider<AppNavigationHub>.value(value: navHub),
         ChangeNotifierProvider<ThemeProvider>.value(value: themeProvider),
+        ChangeNotifierProvider<CloudAuthProvider>.value(
+          value: cloudAuthProvider,
+        ),
         ChangeNotifierProvider(create: (_) => ExpenseProvider()),
         ChangeNotifierProvider(create: (_) => IncomeProvider()),
         ChangeNotifierProvider(create: (_) => CategoryProvider()),

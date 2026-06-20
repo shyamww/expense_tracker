@@ -9,6 +9,7 @@ class AppRoutes {
   static const accounts = '/accounts';
   static const accountDetailPrefix = '/accounts/';
   static const settings = '/settings';
+  static const cloudSync = '/settings/cloud-sync';
 
   static String accountDetail(String accountName) {
     return '$accountDetailPrefix${Uri.encodeComponent(accountName)}';
