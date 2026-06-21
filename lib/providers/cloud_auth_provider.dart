@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../constants/supabase_config.dart';
 import '../services/supabase_service.dart';
 
 class CloudAuthProvider extends ChangeNotifier {
@@ -79,6 +80,7 @@ class CloudAuthProvider extends ChangeNotifier {
     final res = await client.auth.signUp(
       email: email.trim(),
       password: password,
+      emailRedirectTo: SupabaseConfig.authRedirectUrl,
     );
     _session = res.session;
     notifyListeners();

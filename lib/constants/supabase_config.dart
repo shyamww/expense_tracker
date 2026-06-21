@@ -8,6 +8,10 @@ class SupabaseConfig {
     defaultValue: 'https://izhchozwkbamfnfdbfqw.supabase.co',
   );
   static const String anonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+  static const String authRedirectUrl = String.fromEnvironment(
+    'SUPABASE_AUTH_REDIRECT_URL',
+    defaultValue: 'https://shyamww.github.io/expense_tracker/',
+  );
 
   static bool get isConfigured {
     final parsed = Uri.tryParse(url.trim());
