@@ -11,6 +11,7 @@ class CloudAuthProvider extends ChangeNotifier {
   StreamSubscription<AuthState>? _subscription;
   bool _loaded = false;
   bool _loading = false;
+  Future<void>? _loadFuture;
 
   bool get isConfigured => SupabaseService.isConfigured;
   bool get isReady => _loaded;
@@ -20,31 +21,37 @@ class CloudAuthProvider extends ChangeNotifier {
   String? get email => user?.email;
   String? get setupError => SupabaseService.initializationError;
 
-  Future<void> load() async {
-    if (_loaded || _loading) return;
+  Future<void> load() {
+    if (_loaded) return Future.value();
+    return _loadFuture ??= _load();
+  }
+
+  Future<void> _load() async {
     _loading = true;
     notifyListeners();
 
-    if (!isConfigured || !SupabaseService.isReady) {
-      await SupabaseService.initialize();
-    }
+    try {
+      if (!isConfigured || !SupabaseService.isReady) {
+        await SupabaseService.initialize();
+      }
 
-    if (!isConfigured || !SupabaseService.isReady) {
+      if (!isConfigured || !SupabaseService.isReady) {
+        _loaded = true;
+        return;
+      }
+
+      final auth = SupabaseService.client!.auth;
+      _session = auth.currentSession;
+      _subscription ??= auth.onAuthStateChange.listen((state) {
+        _session = state.session;
+        notifyListeners();
+      });
       _loaded = true;
+    } finally {
       _loading = false;
+      _loadFuture = null;
       notifyListeners();
-      return;
     }
-
-    final auth = SupabaseService.client!.auth;
-    _session = auth.currentSession;
-    _subscription = auth.onAuthStateChange.listen((state) {
-      _session = state.session;
-      notifyListeners();
-    });
-    _loaded = true;
-    _loading = false;
-    notifyListeners();
   }
 
   Future<void> _ensureLoaded() async {

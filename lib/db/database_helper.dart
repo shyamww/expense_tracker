@@ -134,6 +134,10 @@ class DatabaseHelper {
   }
 
   Future<void> _persistCloudStore() async {
+    if (SupabaseService.isConfigured && !SupabaseService.isReady) {
+      await SupabaseService.initialize();
+    }
+
     final userId = SupabaseService.currentUserId;
     final client = SupabaseService.client;
     if (userId == null || client == null) return;

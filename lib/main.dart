@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'app_routes.dart';
+import 'db/database_helper.dart';
 import 'providers/expense_provider.dart';
 import 'providers/income_provider.dart';
 import 'providers/category_provider.dart';
@@ -222,10 +223,12 @@ class ExpenseTrackerApp extends StatelessWidget {
                 ],
               );
               if (!kIsWeb) return body;
-              return BrowserRouteSync(
-                navigatorKey: _navigatorKey,
-                initialRoute: initialRoute,
-                child: body,
+              return CloudDataSyncBootstrap(
+                child: BrowserRouteSync(
+                  navigatorKey: _navigatorKey,
+                  initialRoute: initialRoute,
+                  child: body,
+                ),
               );
             },
           );
@@ -273,6 +276,85 @@ class _BrowserRouteSyncState extends State<BrowserRouteSync> {
   @override
   void dispose() {
     _subscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+class CloudDataSyncBootstrap extends StatefulWidget {
+  const CloudDataSyncBootstrap({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<CloudDataSyncBootstrap> createState() => _CloudDataSyncBootstrapState();
+}
+
+class _CloudDataSyncBootstrapState extends State<CloudDataSyncBootstrap>
+    with WidgetsBindingObserver {
+  static const _syncInterval = Duration(seconds: 20);
+
+  Timer? _timer;
+  bool _syncing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_syncFromCloud());
+      _timer = Timer.periodic(_syncInterval, (_) {
+        unawaited(_syncFromCloud());
+      });
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_syncFromCloud());
+    }
+  }
+
+  Future<void> _syncFromCloud() async {
+    if (_syncing || !mounted) return;
+    _syncing = true;
+    try {
+      final auth = context.read<CloudAuthProvider>();
+      await auth.load();
+      if (!mounted || !auth.isSignedIn) return;
+
+      await DatabaseHelper().reconnectCloudStore();
+      if (!mounted) return;
+
+      final expenseProvider = context.read<ExpenseProvider>();
+      final incomeProvider = context.read<IncomeProvider>();
+      final categoryProvider = context.read<CategoryProvider>();
+      final accountProvider = context.read<AccountProvider>();
+
+      await Future.wait([
+        expenseProvider.loadExpenses(notify: false),
+        incomeProvider.loadIncomeForCurrentMonth(notify: false),
+        categoryProvider.loadCategories(notify: false),
+        accountProvider.refresh(notify: false),
+      ]);
+      if (!mounted) return;
+
+      expenseProvider.forceNotify();
+      incomeProvider.forceNotify();
+      categoryProvider.forceNotify();
+      accountProvider.forceNotify();
+    } finally {
+      _syncing = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
