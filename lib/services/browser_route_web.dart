@@ -6,9 +6,11 @@ String readBrowserRoute(String fallback) {
   final fragment = Uri.base.fragment;
   if (fragment.startsWith('/')) return _routeOrFallback(fragment, fallback);
 
-  final path = html.window.location.pathname;
-  if (path != null && path.length > 1) {
-    return _routeOrFallback(path, fallback);
+  final path = html.window.location.pathname ?? '';
+  final basePath = Uri.base.resolve('.').path;
+  final routePath = _stripBasePath(path, basePath);
+  if (routePath.length > 1) {
+    return _routeOrFallback(routePath, fallback);
   }
 
   return fallback;
@@ -47,4 +49,15 @@ String _normalizeRoute(String route) {
   final trimmed = route.trim();
   if (trimmed.isEmpty) return '/';
   return trimmed.startsWith('/') ? trimmed : '/$trimmed';
+}
+
+String _stripBasePath(String path, String basePath) {
+  final normalizedPath = _normalizeRoute(path);
+  final normalizedBase = _normalizeRoute(basePath);
+  if (normalizedPath == normalizedBase) return '/';
+  if (normalizedPath.startsWith(normalizedBase)) {
+    final rest = normalizedPath.substring(normalizedBase.length);
+    return _normalizeRoute(rest);
+  }
+  return normalizedPath;
 }
