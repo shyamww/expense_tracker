@@ -9,19 +9,32 @@ class CloudAuthProvider extends ChangeNotifier {
   Session? _session;
   StreamSubscription<AuthState>? _subscription;
   bool _loaded = false;
+  bool _loading = false;
 
   bool get isConfigured => SupabaseService.isConfigured;
   bool get isReady => _loaded;
+  bool get isLoading => _loading;
   bool get isSignedIn => user != null;
   User? get user => _session?.user ?? SupabaseService.currentUser;
   String? get email => user?.email;
   String? get setupError => SupabaseService.initializationError;
 
   Future<void> load() async {
+    if (_loaded || _loading) return;
+    _loading = true;
+    notifyListeners();
+
+    if (!isConfigured || !SupabaseService.isReady) {
+      await SupabaseService.initialize();
+    }
+
     if (!isConfigured || !SupabaseService.isReady) {
       _loaded = true;
+      _loading = false;
+      notifyListeners();
       return;
     }
+
     final auth = SupabaseService.client!.auth;
     _session = auth.currentSession;
     _subscription = auth.onAuthStateChange.listen((state) {
@@ -29,12 +42,19 @@ class CloudAuthProvider extends ChangeNotifier {
       notifyListeners();
     });
     _loaded = true;
+    _loading = false;
+    notifyListeners();
+  }
+
+  Future<void> _ensureLoaded() async {
+    if (!_loaded) await load();
   }
 
   Future<void> signIn({
     required String email,
     required String password,
   }) async {
+    await _ensureLoaded();
     final client = SupabaseService.client;
     if (client == null) {
       throw StateError(setupError ?? 'supabase_not_configured');
@@ -51,6 +71,7 @@ class CloudAuthProvider extends ChangeNotifier {
     required String email,
     required String password,
   }) async {
+    await _ensureLoaded();
     final client = SupabaseService.client;
     if (client == null) {
       throw StateError(setupError ?? 'supabase_not_configured');
@@ -64,6 +85,7 @@ class CloudAuthProvider extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    await _ensureLoaded();
     final client = SupabaseService.client;
     if (client == null) return;
     await client.auth.signOut();

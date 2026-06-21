@@ -25,6 +25,14 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
   String? _message;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<CloudAuthProvider>().load();
+    });
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
@@ -176,6 +184,29 @@ class _CloudSyncScreenState extends State<CloudSyncScreen> {
               'Cloud sync is not configured in this build.',
               style: theme.textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (!auth.isReady) {
+      return _Panel(
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2.4),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                'Cloud sync is starting.',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
           ],

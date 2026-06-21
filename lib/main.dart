@@ -22,7 +22,6 @@ import 'screens/settings_screen.dart';
 import 'screens/lock_screen.dart';
 import 'services/browser_route.dart';
 import 'services/expense_reminder_service.dart';
-import 'services/supabase_service.dart';
 import 'package:flutter/services.dart';
 
 Future<void> main() async {
@@ -36,10 +35,8 @@ Future<void> main() async {
 
   final appNavHub = AppNavigationHub();
   final themeProvider = ThemeProvider();
-  await SupabaseService.initialize();
   final cloudAuthProvider = CloudAuthProvider();
   await themeProvider.load();
-  await cloudAuthProvider.load();
   if (!kIsWeb) {
     ExpenseReminderService.onReminderNotificationTap =
         () => appNavHub.requestHomeDashboard();

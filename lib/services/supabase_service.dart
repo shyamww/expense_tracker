@@ -27,7 +27,7 @@ class SupabaseService {
       await Supabase.initialize(
         url: SupabaseConfig.url.trim(),
         publishableKey: SupabaseConfig.anonKey.trim(),
-      );
+      ).timeout(const Duration(seconds: 5));
       _initialized = true;
       _initializationError = null;
     } catch (e, st) {

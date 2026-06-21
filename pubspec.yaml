@@ -27,7 +27,7 @@ dependencies:
   flutter_secure_storage: ^9.2.2
   crypto: ^3.0.5
   path_provider: ^2.1.4
-  supabase_flutter: ^2.15.0
+  supabase_flutter: 2.14.2
 
 dev_dependencies:
   flutter_test:
